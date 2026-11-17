@@ -1,0 +1,85 @@
+{
+  "phieu_sinh_ton_nguoi_lon": {
+    "title": "Bảng theo dõi dấu hiệu sinh tồn cho người lớn",
+    "aliases": ["phiếu sinh tồn", "sinh tồn", "DHST"],
+    "fields": [
+      {"field_id": "mach", "label": "Mạch", "type": "number", "ui": "number", "required": true, "data_level": 2},
+      {"field_id": "nhip_tho", "label": "Nhịp thở", "type": "number", "ui": "number", "required": true, "data_level": 2},
+      {"field_id": "huyet_ap", "label": "Huyết áp", "type": "string", "ui": "text", "required": false, "data_level": 2},
+      {"field_id": "nhiet_do", "label": "Nhiệt độ", "type": "number", "ui": "number", "required": false, "data_level": 2},
+      {"field_id": "spo2", "label": "SpO2", "type": "number", "ui": "number", "required": false, "data_level": 2}
+    ]
+  },
+  "phieu_cham_soc": {
+    "title": "Phiếu chăm sóc điều dưỡng",
+    "aliases": ["phiếu chăm sóc", "chăm sóc"],
+    "fields": [
+      {"field_id": "thuc_hien", "label": "Nội dung chăm sóc", "type": "string", "ui": "text", "required": true, "data_level": 2},
+      {"field_id": "nguoi_thuc_hien", "label": "Người thực hiện", "type": "string", "ui": "text", "required": true, "data_level": 2}
+    ]
+  },
+  "phieu_nguy_co_nga": {
+    "title": "Đánh giá nguy cơ ngã",
+    "aliases": ["nguy cơ ngã", "phiếu ngã", "đánh giá ngã"],
+    "fields": [
+      {"field_id": "diem_nga", "label": "Điểm nguy cơ ngã", "type": "number", "ui": "number", "required": true, "data_level": 2},
+      {"field_id": "ket_qua", "label": "Kết quả", "type": "string", "ui": "text", "required": true, "data_level": 2}
+    ]
+  },
+  "phieu_danh_gia_dau": {
+    "title": "Đánh giá đau",
+    "aliases": ["đánh giá đau", "phiếu đau"],
+    "fields": [
+      {"field_id": "diem_dau", "label": "Điểm đau", "type": "number", "ui": "number", "required": true, "data_level": 2},
+      {"field_id": "thoi_diem_danh_gia", "label": "Thời điểm đánh giá", "type": "datetime", "ui": "datetime", "required": true, "data_level": 2}
+    ]
+  },
+  "phieu_danh_gia_ban_dau": {
+    "title": "Đánh giá ban đầu",
+    "aliases": ["đánh giá ban đầu", "đánh giá khi nhập viện"],
+    "fields": [
+      {"field_id": "di_ung", "label": "Dị ứng", "type": "string", "ui": "text", "required": true, "data_level": 2},
+      {"field_id": "thuoc_dang_dung", "label": "Thuốc đang dùng", "type": "string", "ui": "text", "required": false, "data_level": 2},
+      {"field_id": "nguoi_lien_he", "label": "Người liên hệ", "type": "string", "ui": "text", "required": true, "data_level": 2},
+      {"field_id": "tien_su", "label": "Tiền sử", "type": "string", "ui": "text", "required": false, "data_level": 2}
+    ]
+  },
+  "benh_an_vao_vien": {
+    "title": "Bệnh án vào viện",
+    "aliases": ["bệnh án vào viện", "bệnh án nhập viện"],
+    "fields": [
+      {"field_id": "ly_do_vao_vien", "label": "Lý do vào viện", "type": "string", "ui": "text", "required": true, "data_level": 2},
+      {"field_id": "chan_doan", "label": "Chẩn đoán", "type": "string", "ui": "text", "required": true, "data_level": 2}
+    ]
+  },
+  "benh_an_ra_vien": {
+    "title": "Tóm tắt bệnh án ra viện",
+    "aliases": ["tóm tắt ra viện", "bệnh án ra viện", "ra viện"],
+    "fields": [
+      {"field_id": "chan_doan_ra_vien", "label": "Chẩn đoán ra viện", "type": "string", "ui": "text", "required": true, "data_level": 2},
+      {"field_id": "huong_dieu_tri", "label": "Hướng điều trị", "type": "string", "ui": "text", "required": true, "data_level": 2}
+    ]
+  },
+  "phieu_theo_doi_sau_mo": {
+    "title": "Theo dõi sau mổ",
+    "aliases": ["theo dõi sau mổ", "sau mổ"],
+    "fields": [
+      {"field_id": "dau_hieu", "label": "Dấu hiệu theo dõi", "type": "string", "ui": "text", "required": true, "data_level": 2}
+    ]
+  },
+  "phieu_giao_duc_suc_khoe": {
+    "title": "Giáo dục sức khỏe",
+    "aliases": ["giáo dục sức khỏe"],
+    "fields": [
+      {"field_id": "noi_dung", "label": "Nội dung giáo dục", "type": "string", "ui": "text", "required": true, "data_level": 2},
+      {"field_id": "nguoi_nhan", "label": "Người nhận giáo dục", "type": "string", "ui": "text", "required": true, "data_level": 2}
+    ]
+  },
+  "phieu_danh_gia_loet": {
+    "title": "Đánh giá nguy cơ loét tì đè",
+    "aliases": ["đánh giá loét", "nguy cơ loét", "loét"],
+    "fields": [
+      {"field_id": "diem_braden", "label": "Điểm Braden", "type": "number", "ui": "number", "required": true, "data_level": 2}
+    ]
+  }
+}

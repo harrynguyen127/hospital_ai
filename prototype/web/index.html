@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Trợ lý Hồ sơ EMR</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="proto wrap">Bản mẫu thử nghiệm. Bệnh nhân, dữ liệu và văn bản quy định đều là dữ liệu giả, lấy từ server prototype. Chỗ ghi "giả định" cần QLCL hoặc điều dưỡng trưởng xác nhận.</div>
+<header class="topbar wrap">
+  <b>EMR mô phỏng</b>
+  <span class="clock">Giờ mô phỏng <b class="mono" id="clock"></b>
+    <button type="button" class="mini" id="t15">+15 phút</button><button type="button" class="mini" id="t60">+1 giờ</button></span>
+  <button type="button" class="mini" id="flowbtn">Luồng dữ liệu</button>
+  <button type="button" class="mini" id="adminbtn">Quản trị quy định</button>
+  <label class="acct" for="acct">Đăng nhập (mô phỏng)<select id="acct"></select></label>
+</header>
+<main class="wrap" id="emr"></main>
+
+<button id="bubble" type="button" aria-label="Mở trợ lý" aria-expanded="false"><span id="blabel">Trợ lý</span> <span class="n" id="count"></span></button>
+<button id="nudge" type="button" hidden></button>
+<section id="panel" aria-label="Trợ lý hồ sơ" hidden>
+  <div class="p-head" id="phead"><b>Trợ lý hồ sơ</b><button id="close" type="button" aria-label="Thu nhỏ trợ lý">Thu nhỏ</button></div>
+  <div class="ctx" id="ctx" hidden></div>
+  <div class="seg" role="tablist">
+    <button id="tabR" role="tab" type="button">Nhắc việc</button>
+    <button id="tabQ" role="tab" type="button">Hỏi đáp</button>
+    <button id="tabV" role="tab" type="button">Giọng nói</button>
+  </div>
+  <div class="body" id="pbody"></div>
+  <div id="askwrap" hidden>
+    <div class="chips" id="chips"></div>
+    <form class="ask" id="askform"><input id="askinput" autocomplete="off" placeholder="Hỏi về quy định hoặc hồ sơ bệnh nhân" aria-label="Câu hỏi"><button type="submit">Hỏi</button></form>
+  </div>
+  <div class="p-foot">Trợ lý chỉ nhắc và điền nháp. Không có gì được lưu vào EMR khi người dùng chưa kiểm tra và bấm lưu.</div>
+</section>
+<div id="toast" role="status" hidden></div>
+
+<div id="flow" hidden><div class="card" role="dialog" aria-modal="true" aria-labelledby="flowh">
+ <div class="form-h"><h2 id="flowh">Luồng dữ liệu của trợ lý</h2><button type="button" class="btn ghost sm" id="flowclose">Đóng</button></div>
+ <p class="note">Trợ lý là một dịch vụ riêng, nối vào EMR qua cổng adapter. EMR không cần sửa. Trong bản mẫu, adapter đọc trực tiếp màn hình EMR mô phỏng; bản thật cần IT cho biết đọc qua API, database hay giao diện.</p>
+ <div class="legend"><span class="pill okp">Xử lý tại máy, trong mạng viện</span><span class="pill aip">Cloud, chỉ nhận dữ liệu đã che</span><span class="pill" style="background:var(--accent-soft);color:var(--accent)">Người dùng quyết định</span></div>
+ <div class="lane"><h3>Nhắc việc</h3><div class="chain">
+  <div class="node"><b>EMR</b>Trạng thái phiếu, giờ lưu, người thực hiện</div><span class="arr">→</span>
+  <div class="node loc"><b>Adapter</b>Đọc trạng thái, không ghi</div><span class="arr">→</span>
+  <div class="node loc"><b>Bộ luật QLCL + schema phiếu</b>Hạn, chu kỳ, trường bắt buộc</div><span class="arr">→</span>
+  <div class="node loc"><b>Engine nhắc việc</b>Tính lần tiếp theo từ dữ liệu vừa nhập, lọc theo vai trò</div><span class="arr">→</span>
+  <div class="node user"><b>Trợ lý nổi</b>Hiện nhắc, không tự điền</div></div></div>
+ <div class="lane"><h3>Nhập bằng giọng nói</h3><div class="chain">
+  <div class="node loc"><b>Micro</b>Âm thanh không lưu</div><span class="arr">→</span>
+  <div class="node loc"><b>STT + tách người nói</b>Chạy tại máy</div><span class="arr">→</span>
+  <div class="node loc"><b>Che định danh</b>Tên, địa chỉ, SĐT, số giấy tờ thành nhãn</div><span class="arr">→</span>
+  <div class="node cloud"><b>LLM</b>Phân loại câu, trích vào ô theo schema</div><span class="arr">→</span>
+  <div class="node loc"><b>Ghép lại tại máy</b>Chỉ ô được phép nhận lại giá trị thật</div><span class="arr">→</span>
+  <div class="node user"><b>Điền nháp</b>Người dùng sửa, xác nhận, lưu</div></div></div>
+ <div class="lane"><h3>Vòng liên kết</h3><div class="chain">
+  <div class="node user"><b>Lưu phiếu</b></div><span class="arr">→</span>
+  <div class="node loc"><b>Kiểm tra trường bắt buộc</b></div><span class="arr">→</span>
+  <div class="node loc"><b>Tính hạn kế tiếp</b>Ví dụ sinh tồn sau mổ, đánh giá lại đau</div><span class="arr">→</span>
+  <div class="node user"><b>Nhắc tiếp</b></div></div></div>
+</div></div>
+
+<div id="admin" hidden><div class="card" role="dialog" aria-modal="true" aria-labelledby="adminh">
+ <div class="form-h"><h2 id="adminh">Quản trị quy định (dành cho QLCL và kỹ thuật)</h2><button type="button" class="btn ghost sm" id="adminclose">Đóng</button></div>
+ <div class="seg" role="tablist">
+   <button type="button" data-a="policy" class="on">Nạp quy định</button>
+   <button type="button" data-a="detect">Nhận diện form</button>
+   <button type="button" data-a="audit">Nhật ký</button>
+ </div>
+ <div id="adminbody"></div>
+</div></div>
+
+<script src="mock-data.js"></script>
+<script src="mock-api.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

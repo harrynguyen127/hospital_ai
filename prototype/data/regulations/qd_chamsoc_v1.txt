@@ -1,0 +1,18 @@
+QUYẾT ĐỊNH NỘI BỘ – QUY ĐỊNH CHĂM SÓC (DỮ LIỆU GIẢ, PROTOTYPE)
+Mã văn bản: QD-CHAMSOC-2026 · Phiên bản: v1 · Hiệu lực từ: 10/11/2026
+
+Điều 1. Bệnh án
+1.1 Bác sĩ phải lập phiếu bệnh án vào viện trong vòng 24 giờ kể từ khi bệnh nhân vào viện. Trường bắt buộc: lý do vào viện, chẩn đoán.
+1.2 Bác sĩ phải lập phiếu tóm tắt ra viện trong ngày khi bệnh nhân ra viện. Trường bắt buộc: chẩn đoán ra viện, hướng điều trị.
+
+Điều 2. Theo dõi sau mổ
+2.1 Bác sĩ phải lập phiếu theo dõi sau mổ theo lịch: 1, 1, 2, 2, 2, 4, 4, 4, 4 giờ, tính từ lúc kết thúc phẫu thuật. Trường bắt buộc: dấu hiệu theo dõi.
+
+Điều 3. Điều dưỡng
+3.1 Điều dưỡng phải lập phiếu sinh tồn mỗi 4 giờ một lần, tính từ lần nhập gần nhất. Trường bắt buộc: mạch, nhịp thở.
+3.2 Điều dưỡng phải lập phiếu chăm sóc tối thiểu 4 lần mỗi ngày. Trường bắt buộc: nội dung chăm sóc, người thực hiện.
+3.3 Điều dưỡng phải đánh giá nguy cơ ngã trước 12:00 mỗi ngày. Trường bắt buộc: điểm nguy cơ ngã, kết quả.
+3.4 Điều dưỡng phải lập phiếu đánh giá ban đầu trong vòng 24 giờ kể từ khi bệnh nhân vào viện. Trường bắt buộc: dị ứng, người liên hệ.
+
+Điều 4. Đánh giá đau
+4.1 Điều dưỡng phải lập phiếu đánh giá đau sau 30 phút khi dùng thuốc tiêm, truyền giảm đau. Trường bắt buộc: điểm đau, thời điểm đánh giá.
