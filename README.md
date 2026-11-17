@@ -71,10 +71,10 @@ Mỗi tính năng là một folder độc lập: code, README, test riêng. Ch�
 
 | Folder | Nội dung | Phân công (đề xuất, team chốt) |
 |---|---|---|
-| `features/pii_filter/` | Lọc PII (slot `pii.mask`) | Trịnh Xuân Huy |
+| `features/pii_filter/` | Lọc PII (slot `pii.mask`) | Bùi Đức Thành |
 | `features/voice_input/` | Giọng nói → form, gửi API ngoài sau lọc PII (slot `voice.send`) | Mai Tiến Huy |
-| `features/detect_form/` | Detect form (slot `form.detect`) | Bùi Đức Thành |
-| `features/policy_rules/` | Policy → rule (slot `policy.ingest`) | Nguyễn Anh Tuấn |
+| `features/detect_form/` | Detect form (slot `form.detect`) | Nguyễn Anh Tuấn |
+| `features/policy_rules/` | Policy → rule (slot `policy.ingest`) | Trịnh Xuân Huy |
 
 Lõi `services/` (store, nhắc việc, engine) do cả team dùng chung. Thay đổi lõi cần báo nhóm.
 
