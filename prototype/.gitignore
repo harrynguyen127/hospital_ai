@@ -1,0 +1,4 @@
+# Trạng thái chạy thử của prototype (tự tạo khi chạy)
+.runtime/
+__pycache__/
+*.pyc

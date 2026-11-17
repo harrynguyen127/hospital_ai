@@ -1,0 +1,49 @@
+{
+  "users": [
+    {"id": "bs_a", "label": "Bác sĩ A (dữ liệu giả)", "role": "bac_si"},
+    {"id": "dd_b", "label": "Điều dưỡng B (dữ liệu giả)", "role": "dieu_duong"}
+  ],
+  "patients": [
+    {"patient_id": "BN-01", "name": "BN-01 (giả)", "bed": "G1-01", "doctor": "bs_a", "nurse": "dd_b",
+     "events": [
+       {"event": "admission", "at": "2026-11-15T08:00:00+07:00"},
+       {"event": "surgery_end", "at": "2026-11-15T13:30:00+07:00"},
+       {"event": "medication_given", "at": "2026-11-16T09:00:00+07:00", "route": "tiem", "purpose": "giam_dau"}
+     ]},
+    {"patient_id": "BN-02", "name": "BN-02 (giả)", "bed": "G1-02", "doctor": "bs_a", "nurse": "dd_b",
+     "events": [
+       {"event": "admission", "at": "2026-11-14T09:00:00+07:00"},
+       {"event": "surgery_end", "at": "2026-11-14T15:00:00+07:00"}
+     ]},
+    {"patient_id": "BN-03", "name": "BN-03 (giả)", "bed": "G1-03", "doctor": "bs_a", "nurse": "dd_b",
+     "events": [
+       {"event": "admission", "at": "2026-11-13T10:00:00+07:00"},
+       {"event": "surgery_end", "at": "2026-11-13T14:00:00+07:00"}
+     ]},
+    {"patient_id": "BN-04", "name": "BN-04 (giả)", "bed": "G2-01", "doctor": "bs_a", "nurse": "dd_b",
+     "events": [
+       {"event": "admission", "at": "2026-11-12T08:30:00+07:00"},
+       {"event": "surgery_end", "at": "2026-11-12T11:00:00+07:00"}
+     ]},
+    {"patient_id": "BN-05", "name": "BN-05 (giả)", "bed": "G2-02", "doctor": "bs_a", "nurse": "dd_b",
+     "events": [
+       {"event": "admission", "at": "2026-11-10T09:00:00+07:00"},
+       {"event": "surgery_end", "at": "2026-11-10T12:00:00+07:00"},
+       {"event": "discharge", "at": "2026-11-15T15:00:00+07:00"}
+     ]},
+    {"patient_id": "BN-06", "name": "BN-06 (giả)", "bed": "G2-03", "doctor": "bs_a", "nurse": "dd_b",
+     "events": [
+       {"event": "admission", "at": "2026-11-11T10:00:00+07:00"},
+       {"event": "surgery_end", "at": "2026-11-11T13:00:00+07:00"},
+       {"event": "discharge", "at": "2026-11-16T08:00:00+07:00"}
+     ]}
+  ],
+  "records": [
+    {"record_id": "REC-0001", "patient_id": "BN-01", "form_id": "benh_an_vao_vien", "at": "2026-11-15T09:00:00+07:00",
+     "values": {"ly_do_vao_vien": "Đau bụng vùng thượng vị", "chan_doan": "Viêm tụy cấp (giả)"},
+     "user": "bs_a", "source": "emr", "missing_required": []},
+    {"record_id": "REC-0002", "patient_id": "BN-02", "form_id": "phieu_danh_gia_ban_dau", "at": "2026-11-14T10:00:00+07:00",
+     "values": {"di_ung": "Penicillin"},
+     "user": "dd_b", "source": "emr", "missing_required": ["nguoi_lien_he"]}
+  ]
+}
