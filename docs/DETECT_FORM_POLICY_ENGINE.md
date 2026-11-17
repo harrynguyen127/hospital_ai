@@ -241,3 +241,9 @@ prototype/
 ## 4. Chỉ số cần đo
 - **Detect form:** tỷ lệ nhận đúng form; precision/recall trường (nhãn, kiểu, bắt buộc); độ trễ từng tầng; tỷ lệ cache hit; số lần phải sửa hoặc hoàn tác schema sau khi đã tự áp dụng.
 - **Policy:** precision/recall luật so với bộ luật chuẩn làm tay; độ chính xác từng trường (form, vai trò, hạn, trường bắt buộc); tỷ lệ luật phải sửa; số luật bị loại do trích dẫn không khớp; thời gian từ nạp văn bản đến nhắc việc cập nhật.
+
+## 5. Kịch bản giọng nói trong prototype
+
+Giao diện có ba buổi hội thoại giả cho Bệnh án vào viện, Đánh giá ban đầu và Dấu hiệu sinh tồn, phù hợp schema hiện tại (chi tiết tại `prototype/README.md`). `web/voice-samples.js` chỉ chứa câu nói và vai người nói; không chứa kết quả điền sẵn. Từng câu đi qua `/api/voice` để che PII, lọc ngoài lề và trích xuất bằng regex trước khi hiển thị transcript. Vai người nói gán sẵn, chưa có STT/diarization thật; bộ lọc PII chỉ bao phủ mẫu tên, SĐT, CCCD đã hỗ trợ.
+
+Luồng giao diện: chọn buổi → nghe transcript → dừng hoặc tự kết thúc → tổng hợp giá trị cuối cùng của mỗi ô → điền nháp → người dùng kiểm tra, sửa, lưu. Có thể hủy trước khi điền nháp. Đổi bệnh nhân, phiếu hoặc tài khoản vô hiệu buổi đang chạy; kết quả bất đồng bộ cũ không được điền vào ngữ cảnh mới. Kịch bản chạy được qua server Python và API giả lập trong trình duyệt, không gọi dịch vụ ngoài.

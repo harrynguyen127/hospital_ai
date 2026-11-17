@@ -70,6 +70,7 @@ function renderList() {
 
 // ===== Hồ sơ bệnh nhân: tab theo phiếu =====
 async function openPatient(pid, formId) {
+  resetVoice();
   S.pt = pid;
   S.detail = await api("/api/patient?id=" + encodeURIComponent(pid));
   if (formId) S.form = formId;
@@ -91,8 +92,12 @@ function renderPatient() {
       ${admit ? `<span>Vào viện <span class="mono">${fmtT(admit.at)}</span></span>` : ""}<span class="muted">Bộ luật ${esc(d.ruleset_version || "—")}</span></div>
     <div><div class="tabs">${d.forms.map((x) => `<button type="button" class="tab ${x.form_id === S.form ? "on" : ""}" data-f="${esc(x.form_id)}">${dueSet.has(x.form_id) ? '<i class="dot" aria-label="Có việc chờ"></i>' : ""}${esc(x.title)}</button>`).join("") || '<span class="tab">Không có phiếu nào</span>'}</div>
     ${f ? formBlock(f) : ""}</div>`;
-  $("back").onclick = () => { S.pt = null; S.detail = null; refreshAll(); };
-  document.querySelectorAll(".tab[data-f]").forEach((b) => (b.onclick = () => { S.form = b.dataset.f; S.draft = {}; S.ai = {}; renderPatient(); renderPanel(); }));
+  $("back").onclick = () => { resetVoice(); S.pt = null; S.detail = null; refreshAll(); };
+  document.querySelectorAll(".tab[data-f]").forEach((b) => (b.onclick = () => { resetVoice(); S.form = b.dataset.f; S.draft = {}; S.ai = {}; renderPatient(); renderPanel(); }));
+  document.querySelectorAll(".fields input").forEach((el) => (el.oninput = () => {
+    S.draft[el.name] = el.type === "number" && el.value !== "" ? Number(el.value) : el.value;
+    if (S.view === "v" && S.voice.st === "review") renderVoice();
+  }));
   const save = $("save");
   if (save) save.onclick = saveRecord;
   const vo = $("voice-open");
@@ -140,7 +145,7 @@ async function saveRecord() {
     const r = await api("/api/records", { patient_id: S.pt, form_id: S.form, values, user: S.user, source: src });
     const miss = r.record.missing_required;
     toast(miss.length ? `Đã lưu, còn thiếu: ${miss.join(", ")}` : "Đã lưu bản ghi đầy đủ.");
-    S.draft = {}; S.ai = {};
+    resetVoice(); S.draft = {}; S.ai = {};
     await refreshAll();
   } catch (e) { toast("Lỗi: " + e.message); }
 }
@@ -234,67 +239,115 @@ function renderChat() {
 }
 
 // ===== Giọng nói: kịch bản mẫu, đi qua trích xuất đã che định danh =====
-const VOICE = {
-  phieu_sinh_ton_nguoi_lon: [
-    "Anh Nguyễn Văn An, số điện thoại 0912345678, hôm nay trời đẹp quá.",
-    "Mạch 88, nhịp thở 20, huyết áp 120 trên 80, nhiệt độ 37 phẩy 2, SpO2 98.",
-    "Huyết áp 118 trên 76, mạch 90.",
-  ],
-  phieu_danh_gia_ban_dau: [
-    "Bệnh nhân dị ứng penicillin, nổi mẩn.",
-    "Đang dùng paracetamol khi sốt.",
-    "Người liên hệ là Lê Thị K, số 0987654321.",
-  ],
-};
+const VOICE = window.VOICE_SAMPLES;
+
+function resetVoice() { S.voice = { st: "idle", segs: [] }; }
+
+function voiceShortcuts() {
+  return `<div class="voice-samples"><div class="sec-h">Chọn buổi mẫu</div>${Object.entries(VOICE).map(([id, sample]) =>
+    `<button type="button" class="item" data-voice-form="${esc(id)}"><span class="nm"><b>${esc(sample.title)}</b><span class="why">${esc(sample.description)}</span></span><span class="mono">${sample.segments.length} câu</span></button>`).join("")}</div>`;
+}
+
+function bindVoiceShortcuts() {
+  $("pbody").querySelectorAll("[data-voice-form]").forEach((el) => (el.onclick = async () => {
+    const pid = S.pt || S.patients[0]?.patient_id;
+    if (!pid) return;
+    try {
+      S.view = "v";
+      await openPatient(pid, el.dataset.voiceForm);
+      setOpen(true);
+    } catch (e) { toast("Không mở được buổi mẫu: " + e.message); }
+  }));
+}
+
+function voiceLines(lines) {
+  return `<div class="lines">${lines.map((l) => `<div class="ln ${l.out ? "pii" : ""}"><span class="who">${esc(l.who)}</span><span class="tx">${l.out ? '<span class="drop">Câu ngoài lề, đã bỏ</span>' : esc(l.masked)}${l.pii ? ' <span class="tag pii">Đã che định danh</span>' : ""}</span></div>`).join("")}</div>`;
+}
 
 function renderVoice() {
-  const b = $("pbody"), v = S.voice, script = VOICE[S.form];
-  if (!S.pt) { b.innerHTML = '<div class="vx"><div class="none">Mở một bệnh nhân và một phiếu để nhập bằng giọng nói.</div></div>'; return; }
+  const b = $("pbody"), v = S.voice, sample = VOICE[S.form];
+  if (!S.pt) {
+    b.innerHTML = `<div class="vx"><div class="none">Mở một bệnh nhân và một phiếu để nhập bằng giọng nói. Chọn buổi mẫu bên dưới để mở hồ sơ đầu tiên.</div>${voiceShortcuts()}</div>`;
+    bindVoiceShortcuts(); return;
+  }
   if (v.st === "idle") {
-    b.innerHTML = `<div class="vx">${script
+    b.innerHTML = `<div class="vx">${sample
       ? `<div class="target">Sẽ điền vào <b class="mono">${esc(S.pt)}</b> · <b>${esc((S.detail.forms.find((f) => f.form_id === S.form) || {}).title)}</b></div>
+         <p class="note">${esc(sample.description)} (${sample.segments.length} câu)</p>
          <button type="button" class="bigbtn" id="vstart">Bắt đầu nghe (kịch bản mẫu)</button>
-         <p class="hint">Bản mẫu không dùng micro thật: phát một buổi mẫu, lời nói được che định danh tại máy trước khi trích xuất. Kết quả chỉ là nháp, cần bấm lưu.</p>`
-      : '<div class="none">Phiếu này chưa có kịch bản mẫu để thử.</div>'}</div>`;
+         <p class="hint">Hội thoại giả, không dùng micro thật. Từng câu được che định danh bằng bộ lọc prototype trước khi trích xuất. Kết quả chỉ là nháp, cần kiểm tra và bấm lưu.</p>
+         <ol class="voice-guide"><li>Phát hội thoại theo từng người nói.</li><li>Che tên, số điện thoại và số giấy tờ; bỏ câu ngoài lề.</li><li>Trích xuất theo các ô của phiếu đang mở.</li><li>Kiểm tra, sửa và lưu bản ghi.</li></ol>`
+      : '<div class="none">Phiếu này chưa có kịch bản mẫu để thử.</div>'}${voiceShortcuts()}</div>`;
     const s = $("vstart");
-    if (s) s.onclick = () => voiceRun(script);
+    if (s) s.onclick = () => voiceRun(sample);
+    bindVoiceShortcuts();
   } else if (v.st === "listening") {
-    b.innerHTML = `<div class="vx"><div class="live"><i class="dot-rec"></i> Đang nghe</div><div class="lines">${v.segs.map((x) => `<div class="ln"><span class="who">Người nói</span><span class="tx">${esc(x)}</span></div>`).join("")}</div></div>`;
+    b.innerHTML = `<div class="vx"><div class="live" role="status"><i class="dot-rec"></i> Đang nghe · ${v.segs.length}/${v.total} câu</div>
+      ${v.segs.length ? voiceLines(v.segs) : '<p class="hint">Đang chờ người nói…</p>'}
+      <button type="button" class="bigbtn stop" id="vstop" ${v.segs.length ? "" : "disabled"}>Dừng và xử lý</button>
+      <button type="button" class="btn ghost" id="vcancel">Hủy, không xử lý</button></div>`;
+    $("vstop").onclick = () => voiceProcess(v);
+    $("vcancel").onclick = () => { resetVoice(); renderPanel(); };
   } else if (v.st === "processing") {
-    b.innerHTML = `<div class="vx"><ul class="steps">${v.steps.map((s) => `<li class="${s.s}"><span class="st">${s.s === "done" ? "✓" : ""}</span><span>${esc(s.t)}</span></li>`).join("")}</ul></div>`;
+    b.innerHTML = `<div class="vx"><ul class="steps" aria-label="Tiến trình xử lý">${v.steps.map((s) => `<li class="${s.s}"><span class="st">${s.s === "done" ? "✓" : ""}</span><span>${esc(s.t)}</span></li>`).join("")}</ul>
+      <button type="button" class="btn ghost" id="vcancel">Hủy, không xử lý</button></div>`;
+    $("vcancel").onclick = () => { resetVoice(); renderPanel(); };
+  } else if (v.st === "error") {
+    b.innerHTML = `<div class="vx"><div class="none" role="alert">${esc(v.error)}</div><button type="button" class="btn ghost" id="vreset">Thử lại buổi mẫu</button></div>`;
+    $("vreset").onclick = () => { resetVoice(); renderPanel(); };
   } else {
+    const form = S.detail.forms.find((f) => f.form_id === S.form);
+    const required = form.fields.filter((f) => f.required || form.required.includes(f.field_id));
+    const missing = required.filter((f) => !String(S.draft[f.field_id] ?? "").trim());
     b.innerHTML = `<div class="vx"><div class="pills"><span class="pill aip">${v.filled} ô điền nháp</span><span class="pill late">${v.redacted} chỗ đã che định danh</span></div>
-      <div class="lines">${v.lines.map((l) => `<div class="ln ${l.out ? "pii" : ""}"><span class="who">Người nói</span><span class="tx">${l.out ? '<span class="drop">Câu ngoài lề, đã bỏ</span>' : esc(l.masked)}</span></div>`).join("")}</div>
+      <div class="hint">${v.lines.filter((l) => l.out).length} câu ngoài lề đã bỏ · Câu đọc lại cập nhật giá trị trước đó.</div>
+      ${voiceLines(v.lines)}
+      <div class="voice-result"><div class="sec-h">Kết quả trích xuất · chưa lưu</div>${Object.entries(v.draft).map(([key, value]) => `<div><span>${esc(form.fields.find((f) => f.field_id === key)?.label || key)}</span><b>${esc(value)}</b></div>`).join("") || '<p class="hint">Chưa nghe được giá trị phù hợp với ô nào.</p>'}</div>
+      ${missing.length ? `<div class="reqwarn">Cần bổ sung: ${esc(missing.map((f) => f.label).join(", "))}.</div>` : '<div class="reqok">Đã đủ trường bắt buộc.</div>'}
       <p class="hint">Các ô điền nháp đã hiện màu tím trên phiếu. Kiểm tra, sửa nếu cần, rồi bấm Lưu bản ghi.</p>
       <button type="button" class="btn ghost" id="vreset">Ghi buổi mới</button></div>`;
-    $("vreset").onclick = () => { S.voice = { st: "idle", segs: [] }; S.ai = {}; S.draft = {}; renderPatient(); renderPanel(); };
+    $("vreset").onclick = () => { resetVoice(); renderPanel(); };
   }
 }
 
-async function voiceRun(script) {
-  S.voice = { st: "listening", segs: [] };
+async function voiceRun(sample) {
+  const v = { st: "listening", segs: [], total: sample.segments.length, patient: S.pt, form: S.form };
+  S.voice = v;
   renderPanel();
-  for (const line of script) {
-    await sleep(500);
-    S.voice.segs.push(line);
+  try {
+    for (const segment of sample.segments) {
+      await sleep(900);
+      if (S.voice !== v || v.st !== "listening") return;
+      const r = await api("/api/voice", { text: segment.text, form_id: v.form });
+      if (S.voice !== v || v.st !== "listening") return;
+      v.segs.push({ who: segment.who, masked: r.masked, out: r.out_of_scope, pii: r.pii_masked, extracted: r.extracted });
+      renderPanel();
+    }
+    await sleep(600);
+    if (S.voice === v && v.st === "listening") await voiceProcess(v);
+  } catch (e) {
+    if (S.voice !== v || v.st !== "listening") return;
+    v.st = "error"; v.error = "Không xử lý được hội thoại: " + e.message;
     renderPanel();
   }
-  await sleep(300);
-  S.voice.st = "processing";
-  S.voice.steps = [{ t: "Che định danh tại máy", s: "run" }, { t: "Trích xuất theo ô của phiếu", s: "wait" }, { t: "Điền nháp", s: "wait" }];
+}
+
+async function voiceProcess(v) {
+  if (S.voice !== v || v.st !== "listening") return;
+  v.st = "processing";
+  v.steps = [{ t: "Đã che định danh trước khi trích xuất", s: "done" }, { t: "Tổng hợp theo ô của phiếu, bỏ câu ngoài lề", s: "run" }, { t: "Điền nháp để người dùng kiểm tra", s: "wait" }];
   renderPanel();
-  const lines = [], draft = {}, ai = {};
-  let redacted = 0;
-  for (const text of S.voice.segs) {
-    const r = await api("/api/voice", { text, form_id: S.form });
-    redacted += r.pii_masked;
-    lines.push({ masked: r.masked, out: r.out_of_scope });
-    Object.assign(draft, r.extracted);
-  }
-  Object.keys(draft).forEach((k) => { ai[k] = true; });
-  S.draft = { ...draft };
-  S.ai = ai;
-  S.voice = { st: "review", segs: [], lines, redacted, filled: Object.keys(draft).length };
+  await sleep(450);
+  if (S.voice !== v) return;
+  const draft = {};
+  v.segs.filter((l) => !l.out).forEach((l) => Object.assign(draft, l.extracted));
+  v.steps[1].s = "done"; v.steps[2].s = "run";
+  renderPanel();
+  await sleep(450);
+  if (S.voice !== v || S.pt !== v.patient || S.form !== v.form) return;
+  S.draft = { ...S.draft, ...draft };
+  Object.keys(draft).forEach((k) => { S.ai[k] = true; });
+  S.voice = { st: "review", segs: [], lines: v.segs, draft, redacted: v.segs.reduce((n, l) => n + l.pii, 0), filled: Object.keys(draft).length };
   renderPatient();
   renderPanel();
 }
@@ -390,7 +443,7 @@ async function init() {
     const b = document.querySelector(".proto");
     if (b) b.textContent = "Bản mẫu thử nghiệm đang chạy giả lập trong trình duyệt (không cần server). Bệnh nhân, dữ liệu và văn bản quy định đều là dữ liệu giả. Trạng thái chỉ lưu trong trang này, tải lại sẽ về dữ liệu mặc định.";
   }
-  $("acct").onchange = (e) => { S.user = e.target.value; S.rules = null; refreshAll(); toast("Đã đăng nhập: " + me().label); };
+  $("acct").onchange = (e) => { resetVoice(); S.user = e.target.value; S.rules = null; refreshAll(); toast("Đã đăng nhập: " + me().label); };
   $("t15").onclick = () => setClock(15);
   $("t60").onclick = () => setClock(60);
   $("flowbtn").onclick = () => { $("flow").hidden = false; $("flowclose").focus(); };

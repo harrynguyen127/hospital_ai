@@ -30,6 +30,20 @@ Tính năng nối bản thật thế nào: xem [contracts/CONTRACTS.md](contract
 3. Không sửa code, không khởi động lại → tab **Nhắc việc** hiện **15 việc**, hạn tính lại; header ghi "Bộ luật đang áp dụng: v2, hiệu lực từ …".
 4. Nút **Hoàn tác về phiên bản trước** đưa về v1 (13 việc).
 
+## Thử kịch bản giọng nói
+
+Mở `web/index.html` trực tiếp hoặc chạy server, chọn tab **Giọng nói** của trợ lý rồi chọn một buổi mẫu:
+
+| Buổi mẫu | Nội dung thử | Kết quả khi nghe hết |
+|---|---|---|
+| Bệnh án vào viện | Bác sĩ, bệnh nhân và người nhà; thông tin định danh và câu ngoài lề | Nháp lý do vào viện và chẩn đoán |
+| Đánh giá ban đầu | Dị ứng, thuốc đang dùng, tiền sử, người liên hệ | Nháp 4 ô; tên và SĐT được che |
+| Dấu hiệu sinh tồn | Đọc 5 chỉ số rồi đọc lại mạch và huyết áp | Mạch 90, nhịp thở 20, huyết áp 118/76, nhiệt độ 37.2, SpO2 98 |
+
+Bấm **Bắt đầu nghe (kịch bản mẫu)** để phát transcript theo người nói. Có thể **Dừng và xử lý** phần đã nghe hoặc **Hủy, không xử lý**. Khi hết buổi, giao diện tự tổng hợp, hiện các câu đã che định danh/bỏ ngoài lề và giá trị trích xuất. Các ô trên phiếu có màu tím, vẫn sửa được; chỉ **Lưu bản ghi** mới lưu. **Ghi buổi mới** giữ các ô đang nhập. Đổi bệnh nhân, phiếu hoặc tài khoản sẽ hủy buổi nghe đang chạy để tránh điền nhầm.
+
+Hội thoại nằm trong `web/voice-samples.js`, hoàn toàn là dữ liệu giả. Vai người nói được gán sẵn; không có micro, STT hoặc tách người nói thật. Từng câu đi qua cùng API voice ở cả chế độ Python và giả lập trình duyệt, không gán sẵn giá trị trích xuất. Bộ lọc PII hiện chỉ hỗ trợ các mẫu tên, SĐT và CCCD trong prototype.
+
 ## Các module
 
 | Module | File | Ghi chú |
