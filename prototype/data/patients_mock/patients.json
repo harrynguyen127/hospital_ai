@@ -40,10 +40,13 @@
   ],
   "records": [
     {"record_id": "REC-0001", "patient_id": "BN-01", "form_id": "benh_an_vao_vien", "at": "2026-11-15T09:00:00+07:00",
-     "values": {"ly_do_vao_vien": "Đau bụng vùng thượng vị", "chan_doan": "Viêm tụy cấp (giả)"},
+     "values": {"ly_do_vao_vien": "Đau bụng vùng thượng vị", "benh_su": "Đau từ tối hôm trước, tăng sau ăn.", "nguon_tiep_nhan": "Khoa cấp cứu", "kham_ban_dau": "Tỉnh, trả lời được câu hỏi.", "chan_doan": "Viêm tụy cấp (giả)"},
      "user": "bs_a", "source": "emr", "missing_required": []},
     {"record_id": "REC-0002", "patient_id": "BN-02", "form_id": "phieu_danh_gia_ban_dau", "at": "2026-11-14T10:00:00+07:00",
-     "values": {"di_ung": "Penicillin"},
-     "user": "dd_b", "source": "emr", "missing_required": ["nguoi_lien_he"]}
+     "values": {"di_ung": "Penicillin", "tu_cham_soc": "Cần hỗ trợ một phần"},
+     "user": "dd_b", "source": "emr", "missing_required": ["nguoi_lien_he"]},
+    {"record_id": "REC-0003", "patient_id": "BN-01", "form_id": "phieu_sinh_ton_nguoi_lon", "at": "2026-11-16T06:15:00+07:00",
+     "values": {"mach": 84, "nhip_tho": 19, "huyet_ap": "116/74", "nhiet_do": 37.1, "spo2": 98, "thoi_diem_do": "2026-11-16T06:10", "tu_the_do": "Nằm"},
+     "user": "dd_b", "source": "emr", "missing_required": []}
   ]
 }

@@ -42,7 +42,7 @@
 <div id="flow" hidden><div class="card" role="dialog" aria-modal="true" aria-labelledby="flowh">
  <div class="form-h"><h2 id="flowh">Luồng dữ liệu của trợ lý</h2><button type="button" class="btn ghost sm" id="flowclose">Đóng</button></div>
  <p class="note">Trợ lý là một dịch vụ riêng, nối vào EMR qua cổng adapter. EMR không cần sửa. Trong bản mẫu, adapter đọc trực tiếp màn hình EMR mô phỏng; bản thật cần IT cho biết đọc qua API, database hay giao diện.</p>
- <div class="legend"><span class="pill okp">Xử lý tại máy, trong mạng viện</span><span class="pill aip">Cloud, chỉ nhận dữ liệu đã che</span><span class="pill" style="background:var(--accent-soft);color:var(--accent)">Người dùng quyết định</span></div>
+ <div class="legend"><span class="pill okp">Xử lý trong prototype</span><span class="pill" style="background:var(--accent-soft);color:var(--accent)">Người dùng quyết định</span></div>
  <div class="lane"><h3>Nhắc việc</h3><div class="chain">
   <div class="node"><b>EMR</b>Trạng thái phiếu, giờ lưu, người thực hiện</div><span class="arr">→</span>
   <div class="node loc"><b>Adapter</b>Đọc trạng thái, không ghi</div><span class="arr">→</span>
@@ -50,11 +50,9 @@
   <div class="node loc"><b>Engine nhắc việc</b>Tính lần tiếp theo từ dữ liệu vừa nhập, lọc theo vai trò</div><span class="arr">→</span>
   <div class="node user"><b>Trợ lý nổi</b>Hiện nhắc, không tự điền</div></div></div>
  <div class="lane"><h3>Nhập bằng giọng nói</h3><div class="chain">
-  <div class="node loc"><b>Micro</b>Âm thanh không lưu</div><span class="arr">→</span>
-  <div class="node loc"><b>STT + tách người nói</b>Chạy tại máy</div><span class="arr">→</span>
-  <div class="node loc"><b>Che định danh</b>Tên, địa chỉ, SĐT, số giấy tờ thành nhãn</div><span class="arr">→</span>
-  <div class="node cloud"><b>LLM</b>Phân loại câu, trích vào ô theo schema</div><span class="arr">→</span>
-  <div class="node loc"><b>Ghép lại tại máy</b>Chỉ ô được phép nhận lại giá trị thật</div><span class="arr">→</span>
+  <div class="node loc"><b>Hội thoại mẫu</b>Phát từng câu đã soạn sẵn theo vai</div><span class="arr">→</span>
+  <div class="node loc"><b>Che định danh</b>Thay tên mẫu, SĐT và CCCD bằng nhãn</div><span class="arr">→</span>
+  <div class="node loc"><b>Trích xuất theo mẫu câu</b>Ghép chỉ số, mô tả và lựa chọn với trường trên phiếu</div><span class="arr">→</span>
   <div class="node user"><b>Điền nháp</b>Người dùng sửa, xác nhận, lưu</div></div></div>
  <div class="lane"><h3>Vòng liên kết</h3><div class="chain">
   <div class="node user"><b>Lưu phiếu</b></div><span class="arr">→</span>

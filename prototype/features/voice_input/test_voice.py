@@ -22,7 +22,7 @@ FORM = {"fields": [
 
 def fake_mask(text):
     """Bộ lọc giả: chỉ che đúng một chuỗi, để kiểm tra voice dùng đúng bản đã che."""
-    return text.replace("0912345678", "[SĐT]"), text.count("0912345678")
+    return text.replace("0000000000", "[SĐT]"), text.count("0000000000")
 
 
 class VoiceProcessTests(unittest.TestCase):
@@ -32,9 +32,9 @@ class VoiceProcessTests(unittest.TestCase):
         self.assertFalse(out["out_of_scope"])
 
     def test_uses_injected_mask_and_extracts_from_masked_text(self):
-        out = voice.process("Số 0912345678, mạch 90", FORM, mask_fn=fake_mask)
+        out = voice.process("Số 0000000000, mạch 90", FORM, mask_fn=fake_mask)
         self.assertIn("[SĐT]", out["masked"])
-        self.assertNotIn("0912345678", out["masked"])
+        self.assertNotIn("0000000000", out["masked"])
         self.assertEqual(out["pii_masked"], 1)
         self.assertEqual(out["extracted"], {"mach": 90})
 
@@ -51,14 +51,14 @@ class VoiceProcessTests(unittest.TestCase):
 
 class ExternalApiTests(unittest.TestCase):
     def test_prepare_payload_masks_before_sending(self):
-        payload = external_api.prepare_payload("Số 0912345678", fake_mask)
+        payload = external_api.prepare_payload("Số 0000000000", fake_mask)
         self.assertEqual(payload, {"text": "Số [SĐT]", "pii_filtered": True, "pii_masked": 1})
 
     def test_send_refuses_unfiltered_content(self):
         with self.assertRaises(ValueError):
-            external_api.send_filtered("Số 0912345678")
+            external_api.send_filtered("Số 0000000000")
         with self.assertRaises(ValueError):
-            external_api.send_filtered({"text": "Số 0912345678", "pii_filtered": False})
+            external_api.send_filtered({"text": "Số 0000000000", "pii_filtered": False})
 
     def test_default_sender_is_disabled(self):
         payload = external_api.prepare_payload("mạch 80", fake_mask)
@@ -68,7 +68,7 @@ class ExternalApiTests(unittest.TestCase):
         received = []
         registry.connect("voice.send", lambda p: received.append(p) or {"sent": True})
         try:
-            payload = external_api.prepare_payload("Số 0912345678", fake_mask)
+            payload = external_api.prepare_payload("Số 0000000000", fake_mask)
             self.assertEqual(external_api.send_filtered(payload), {"sent": True})
             self.assertEqual(received, [payload])
         finally:

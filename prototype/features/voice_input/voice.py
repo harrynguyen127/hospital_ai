@@ -43,10 +43,15 @@ def extract(text, fields):
                     v = m.group(1)
                     out[f["field_id"]] = float(v) if "." in v else int(v)
                     break
-            elif f["ui"] == "text":
+            elif f["ui"] in ("text", "textarea", "select"):
                 m = re.match(r"\s*(?:là|:)?\s*([^.;,]+)", rest)
                 if m and m.group(1).strip():
-                    out[f["field_id"]] = m.group(1).strip()[:120]
+                    value = m.group(1).strip()[:120]
+                    if f["ui"] == "select":
+                        value = next((opt for opt in f["options"] if norm(opt) == value), None)
+                        if value is None:
+                            continue
+                    out[f["field_id"]] = value
                     break
     return out
 
