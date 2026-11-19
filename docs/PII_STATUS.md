@@ -1,8 +1,14 @@
 # PII Workstream Status
 
-**PII-01 COMPLETE — PII-02 RULES-ONLY LOCAL ENGINE IMPLEMENTED FOR REVIEW**
+**PII-01 COMPLETE AND COMMITTED — PII-02 COMPLETED AND PUSHED (RULES-ONLY REVIEW MVP)**
 
-The approved Architecture Plan V2 is in phased implementation. PII-01 contracts, taxonomy, and evaluation-data foundations are complete. PII-02 adds an independent deterministic local engine; production privacy qualification is not complete.
+The approved Architecture Plan V2 is in phased implementation. PII-01 contracts, taxonomy, and evaluation-data foundations are complete. PII-02 adds an independent deterministic local engine. PII-03 research and architecture planning is committed and pushed; PII-03 implementation has not started.
+
+PII-02 commit: `cb2d7156e4a3fd1df63ae6dd16f826a72cca8777`.
+
+PII-03 research-plan commit: `9ad7ab6536fe02b521da6dde529d2f387d52e66c`.
+
+Production privacy qualification has not been achieved. External transcript egress is prohibited.
 
 The existing [regex prototype](../prototype/features/pii_filter/pii.py) and [compatibility tests](../prototype/features/pii_filter/test_pii.py) remain unchanged team-provided compatibility code, not an official or production PII implementation. The [feature README](../prototype/features/pii_filter/README.md) retains the legacy compatibility instructions and separately documents the new foundation.
 
@@ -29,12 +35,11 @@ PII-02 work implemented for review:
 
 All 20 development engine results require review. This small exposed corpus is not a blind evaluation or production qualification. Local drafts can contain residual PII. The engine never authorizes external transmission.
 
-Previous PhoBERT, OpenMed, ASR, and privacy pipeline work was experimental research only. PhoBERT has not been selected as the official PII model.
+Previous ASR and privacy-pipeline work was experimental research only. No model has been selected for the official PII workstream.
 
 The following capabilities are not implemented as part of the official PII workstream:
 
 - Production PII detection
-- PhoBERT inference
 - OpenMed inference
 - Hybrid NER
 - Pseudonymization
@@ -44,4 +49,4 @@ The following capabilities are not implemented as part of the official PII works
 
 Experimental text privacy implementation and tests have been removed. No previous Windows benchmark runtime is restored.
 
-PII-02 changes remain uncommitted for review. PII-03 through PII-06 have not started. No new registry integration or teammate-owned code changes are included.
+PII-02 is completed and pushed as a rules-only review MVP; it is not production-qualified. PII-03 remains research-only, with implementation not started. PII-04 through PII-06 have not started. No new registry integration or teammate-owned code changes are included.

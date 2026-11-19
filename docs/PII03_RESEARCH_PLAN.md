@@ -17,9 +17,6 @@ published baseline; this plan adds no implementation.
 - The current [PII-02 engine](../prototype/features/pii_filter/engine.py) is a
   separate text-only API. The original `pii.mask(text) -> (str, int)` slot and
   team compatibility prototype remain unchanged.
-- `docs/PII_STATUS.md` contains a stale sentence at its end saying PII-02 is
-  uncommitted. The branch history confirms the opposite. Refresh that status
-  statement as a separate documentation correction before future implementation.
 
 The current architecture and evaluation details are in
 [TEXT_PII_ARCHITECTURE.md](TEXT_PII_ARCHITECTURE.md) and
@@ -97,7 +94,6 @@ below are claims from the linked source, not results reproduced on this project.
 | --- | --- | --- |
 | Deterministic rules and contextual validators | Retain PII-02 as the zero-dependency, reproducible control for structured phone, email, national-ID, patient/encounter-ID, explicit-DOB patterns, and context-cued names. Clear provenance and span behavior. | Current misses show that rules do not cover all name forms or unsupported categories. Expanding a list alone can create clinical false positives. Keep as a baseline and a possible hybrid component, not a completeness claim. |
 | VnCoreNLP NER | Vietnamese word segmentation and general NER can provide a comparison for person/location/organization boundaries. Its NER has historical VLSP 2016 provenance. | General news-style NER, not a PII detector or clinical transcript model. The repository's program license is GPLv3; inspect model/data rights separately before any use. Java/runtime footprint and licensing make it a comparison candidate only. [Repository](https://github.com/vncorenlp/VnCoreNLP), [license](https://raw.githubusercontent.com/vncorenlp/VnCoreNLP/master/LICENSE.md), [releases](https://github.com/vncorenlp/VnCoreNLP/releases). |
-| PhoBERT token classification | A Vietnamese-specific encoder is a candidate for a locally fine-tuned PII head after an approved PII training corpus exists. | `vinai/phobert-base` is listed as MIT, 135M parameters, with a 256-token limit and a word-segmented input requirement; `base-v2` is listed as AGPLv3. The pretrained base is not a trained PII detector. Tokenization/segmentation must preserve exact original-source offsets. [VinAI repository](https://github.com/VinAIResearch/PhoBERT). |
 | XLM-R token classification | Multilingual baseline worth comparing for code-switching and ASR-style transcripts. A Vietnamese medical spoken-NER paper reports XLM-R performing well on its medical NER task and ASR output. | That is not PII evidence. The base model is MIT-licensed but has no project-specific PII head. [Model card](https://huggingface.co/FacebookAI/xlm-roberta-base), [spoken medical-NER paper](https://arxiv.org/abs/2406.13337). |
 | OpenMed Vietnamese PII model | A PII-specific candidate whose card claims 54 entity types and reports self-evaluated results on an AI4Privacy-plus-synthetic test split. The card labels a SuperClinical Small model as 44M and Apache-2.0. | The card reports micro-F1 0.7305 and recall 0.7466, and explicitly warns about false negatives and human review. Those results are not independent and are not on these workflows. Its card says AI4Privacy 200K spans eight languages, while the current AI4Privacy card lists English, French, German, and Italian and no dataset license in the card. OpenMed also lists NVIDIA Nemotron-PII and about 25K Vietnamese synthetic samples. Resolve the data-version, license, base-weight, and training-provenance discrepancy before considering use. Nemotron-PII is described by NVIDIA as synthetic and CC BY 4.0; that does not settle rights for every training source. [OpenMed model card](https://huggingface.co/OpenMed/OpenMed-PII-Vietnamese-SuperClinical-Small-44M-v1), [AI4Privacy dataset card](https://huggingface.co/datasets/ai4privacy/pii-masking-200k), [Nemotron-PII dataset card](https://huggingface.co/datasets/nvidia/Nemotron-PII). |
 | Rules plus contextual PII NER | A benchmark candidate: rules cover precise structured forms while NER proposes context-dependent mentions; aggregation retains evidence and sends unresolved cases to review. | Must be tested as an ablation against each component. Do not let clinical NER veto a possible identifier. Do not use a single global threshold or count an ambiguous unredacted span as safe. |
@@ -269,9 +265,9 @@ The primary development host is MacBook Air M1 with 8 GB unified memory;
 Python 3.12 is available. Start with CPU inference and record cold-start,
 throughput, p50/p95 latency, peak RSS, and thermal behavior. Approximate FP32
 weight storage from parameter count alone is 4 bytes per parameter (e.g.
-44M ≈176 MB, 135M ≈540 MB); this excludes framework, tokenizer, activations,
-windows, and the operating system and is not a measured footprint. Verify model
-parameter counts and actual memory before drawing feasibility conclusions.
+44M ≈176 MB); this excludes framework, tokenizer, activations, windows, and the
+operating system and is not a measured footprint. Verify model parameter counts
+and actual memory before drawing feasibility conclusions.
 
 MPS is optional only after CPU correctness is established. Apple Silicon uses
 shared unified memory for CPU/GPU, and MPS operator/build support varies; compare
