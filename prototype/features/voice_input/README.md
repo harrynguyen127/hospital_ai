@@ -6,7 +6,7 @@
 
 ## Kịch bản giao diện
 
-Tab **Giọng nói** có ba buổi mẫu: Bệnh án vào viện, Đánh giá ban đầu và Dấu hiệu sinh tồn. Dữ liệu hội thoại, vai người nói và mô tả nằm trong `../../web/voice-samples.js`; hướng dẫn thử và kết quả mong đợi ở [README prototype](../../README.md#thử-kịch-bản-giọng-nói).
+Tab **Giọng nói** có 10 buổi mẫu tương ứng với 10 phiếu EMR. Với ô danh sách, bộ trích xuất chỉ nhận một lựa chọn có sẵn trên phiếu. Dữ liệu hội thoại, vai người nói và mô tả nằm trong `../../web/voice-samples.js`; hướng dẫn thử và kết quả mong đợi ở [README prototype](../../README.md#thử-kịch-bản-giọng-nói).
 
 Mỗi câu được xử lý qua `/api/voice` trước khi hiển thị transcript đã che. Người dùng có thể dừng để xử lý phần đã nghe hoặc hủy. Giá trị từ câu đọc lại thay thế giá trị cũ của cùng ô. Hết buổi chỉ tổng hợp vào nháp và hiển thị kết quả để kiểm tra; không tự gọi API lưu bản ghi. Buổi đang chạy bị vô hiệu khi đổi bệnh nhân, phiếu hoặc tài khoản. Đây là mô phỏng hội thoại, chưa có nhận dạng/tách người nói thật.
 

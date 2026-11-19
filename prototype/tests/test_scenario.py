@@ -28,11 +28,25 @@ def _v2_text():
 EMR_SINH_TON = {
     "title": "Bảng theo dõi dấu hiệu sinh tồn cho người lớn",
     "fields": [
+        {"label": "Thời điểm đo", "ui": "datetime"},
+        {"label": "Tư thế đo", "ui": "select"},
+        {"label": "Lý do đo", "ui": "select"},
+        {"label": "Trạng thái lúc đo", "ui": "select"},
+        {"label": "Vị trí đo huyết áp", "ui": "select"},
+        {"label": "Vị trí đo nhiệt độ", "ui": "select"},
         {"label": "Mạch", "ui": "number", "required": True},
         {"label": "Nhịp thở", "ui": "number", "required": True},
         {"label": "Huyết áp", "ui": "text"},
         {"label": "Nhiệt độ", "ui": "number"},
         {"label": "SpO2", "ui": "number"},
+        {"label": "Nhịp mạch khi bắt", "ui": "select"},
+        {"label": "Kiểu thở quan sát được", "ui": "select"},
+        {"label": "Hỗ trợ hô hấp lúc đo", "ui": "select"},
+        {"label": "Tiếp xúc khi đo", "ui": "select"},
+        {"label": "Triệu chứng người bệnh mô tả", "ui": "textarea"},
+        {"label": "So với lần đo trước", "ui": "textarea"},
+        {"label": "Việc đã thực hiện sau đo", "ui": "textarea"},
+        {"label": "Điểm cần bàn giao", "ui": "textarea"},
     ],
 }
 
@@ -92,6 +106,20 @@ class ScenarioTests(unittest.TestCase):
         t = next(t for t in tasks if t["patient_id"] == "BN-02" and t["form_id"] == "phieu_danh_gia_ban_dau")
         self.assertEqual(t["missing_fields"], ["nguoi_lien_he"])
 
+    def test_partial_vitals_do_not_postpone_deadline(self):
+        def task():
+            return next(t for t in reminder.summary(store.read(), "dd_b")["tasks"]
+                        if t["patient_id"] == "BN-01" and t["form_id"] == "phieu_sinh_ton_nguoi_lon")
+
+        due = task()["due"]
+        record = {"patient_id": "BN-01", "form_id": "phieu_sinh_ton_nguoi_lon", "user": "dd_b"}
+        server.p_records({**record, "values": {"mach": 88}})
+        self.assertEqual(task()["missing_labels"], ["Nhịp thở"])
+        self.assertEqual(task()["due"], due)
+        server.p_records({**record, "values": {"mach": 88, "nhip_tho": 20}})
+        self.assertEqual(task()["missing_fields"], [])
+        self.assertEqual(task()["due"], "2026-11-16T14:00:00+07:00")
+
     # --- Detect form ---
     def test_detect_exact_near_and_new(self):
         with store.transaction() as st:
@@ -124,10 +152,10 @@ class ScenarioTests(unittest.TestCase):
     # --- Voice ---
     def test_voice_masks_pii_and_extracts_fields(self):
         form = store.read()["forms"]["phieu_sinh_ton_nguoi_lon"]
-        res = engine.voice_process("Anh Nguyễn Văn An, số điện thoại 0912345678, hôm nay trời đẹp quá.", form)
-        self.assertNotIn("0912345678", res["masked"])
+        res = engine.voice_process("Anh Mẫu A, số điện thoại 0000000000, hôm nay trời đẹp quá.", form)
+        self.assertNotIn("0000000000", res["masked"])
         self.assertIn("[SĐT]", res["masked"])
-        self.assertNotIn("Nguyễn Văn An", res["masked"])
+        self.assertNotIn("Mẫu A", res["masked"])
         self.assertTrue(res["out_of_scope"])
 
         res = engine.voice_process("Mạch 88, nhịp thở 20, huyết áp 120 trên 80, nhiệt độ 37 phẩy 2, SpO2 98.", form)
@@ -137,14 +165,14 @@ class ScenarioTests(unittest.TestCase):
     # --- Gửi API ngoài: chỉ nhận bản đã lọc PII ---
     def test_external_api_refuses_unfiltered_text(self):
         with self.assertRaises(ValueError):
-            send_filtered({"text": "SĐT 0912345678", "pii_filtered": False})
+            send_filtered({"text": "SĐT 0000000000", "pii_filtered": False})
         with self.assertRaises(ValueError):
-            send_filtered("SĐT 0912345678")
+            send_filtered("SĐT 0000000000")
 
     def test_external_api_payload_is_masked_and_disabled_by_default(self):
-        payload = prepare_payload("Bệnh nhân Nguyễn Văn An, SĐT 0912345678, mạch 88.", pii.mask)
-        self.assertNotIn("0912345678", payload["text"])
-        self.assertNotIn("Nguyễn Văn An", payload["text"])
+        payload = prepare_payload("Bệnh nhân Mẫu A, SĐT 0000000000, mạch 88.", pii.mask)
+        self.assertNotIn("0000000000", payload["text"])
+        self.assertNotIn("Mẫu A", payload["text"])
         self.assertEqual(payload["pii_masked"], 2)
         self.assertEqual(send_filtered(payload), {"sent": False, "reason": "prototype: API ngoài chưa được bật"})
 

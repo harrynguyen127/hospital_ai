@@ -17,11 +17,25 @@ from shared.common import fingerprint  # noqa: E402
 EMR_SINH_TON = {
     "title": "Bảng theo dõi dấu hiệu sinh tồn cho người lớn",
     "fields": [
+        {"label": "Thời điểm đo", "ui": "datetime"},
+        {"label": "Tư thế đo", "ui": "select"},
+        {"label": "Lý do đo", "ui": "select"},
+        {"label": "Trạng thái lúc đo", "ui": "select"},
+        {"label": "Vị trí đo huyết áp", "ui": "select"},
+        {"label": "Vị trí đo nhiệt độ", "ui": "select"},
         {"label": "Mạch", "ui": "number", "required": True},
         {"label": "Nhịp thở", "ui": "number", "required": True},
         {"label": "Huyết áp", "ui": "text"},
         {"label": "Nhiệt độ", "ui": "number"},
         {"label": "SpO2", "ui": "number"},
+        {"label": "Nhịp mạch khi bắt", "ui": "select"},
+        {"label": "Kiểu thở quan sát được", "ui": "select"},
+        {"label": "Hỗ trợ hô hấp lúc đo", "ui": "select"},
+        {"label": "Tiếp xúc khi đo", "ui": "select"},
+        {"label": "Triệu chứng người bệnh mô tả", "ui": "textarea"},
+        {"label": "So với lần đo trước", "ui": "textarea"},
+        {"label": "Việc đã thực hiện sau đo", "ui": "textarea"},
+        {"label": "Điểm cần bàn giao", "ui": "textarea"},
     ],
 }
 

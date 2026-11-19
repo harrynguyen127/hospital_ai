@@ -94,60 +94,106 @@ function renderPatient() {
     ${f ? formBlock(f) : ""}</div>`;
   $("back").onclick = () => { resetVoice(); S.pt = null; S.detail = null; refreshAll(); };
   document.querySelectorAll(".tab[data-f]").forEach((b) => (b.onclick = () => { resetVoice(); S.form = b.dataset.f; S.draft = {}; S.ai = {}; renderPatient(); renderPanel(); }));
-  document.querySelectorAll(".fields input").forEach((el) => (el.oninput = () => {
+  document.querySelectorAll(".fields [name]").forEach((el) => (el.oninput = () => {
     S.draft[el.name] = el.type === "number" && el.value !== "" ? Number(el.value) : el.value;
+    const wrapper = el.closest(".f");
+    if (S.ai[el.name]) {
+      delete S.ai[el.name];
+      wrapper.classList.remove("ai");
+      wrapper.querySelector("small")?.remove();
+    }
+    wrapper.classList.toggle("reqmiss", el.getAttribute("aria-required") === "true" && !el.value.trim());
+    $("completeness").innerHTML = completeness(f);
     if (S.view === "v" && S.voice.st === "review") renderVoice();
   }));
+  const fill = $("fill-sample");
+  if (fill) fill.onclick = () => {
+    let added = 0;
+    for (const field of f.fields) {
+      if (String(S.draft[field.field_id] ?? "").trim()) continue;
+      const value = field.ui === "datetime" ? S.clock.slice(0, 16) : field.example;
+      if (value === undefined) continue;
+      S.draft[field.field_id] = value;
+      added++;
+    }
+    renderPatient();
+    renderPanel();
+    toast(added ? `Đã điền thử ${added} ô trống. Bản nháp đang chờ kiểm tra.` : "Các ô có dữ liệu mẫu đã được điền.");
+  };
   const save = $("save");
   if (save) save.onclick = saveRecord;
   const vo = $("voice-open");
   if (vo) vo.onclick = () => { S.view = "v"; setOpen(true); };
 }
 
+function completeness(form) {
+  const empty = form.fields.filter((x) => (x.required || form.required.includes(x.field_id)) && !String(S.draft[x.field_id] ?? "").trim());
+  return empty.length ? `<div class="reqwarn">Còn trống ${empty.length} trường bắt buộc: ${esc(empty.map((x) => x.label).join(", "))}. Vẫn lưu được, nhắc việc sẽ tiếp tục.</div>` : '<div class="reqok">Đã đủ trường bắt buộc.</div>';
+}
+
+function fieldControl(x, required) {
+  const id = esc(x.field_id), value = S.draft[x.field_id] ?? "";
+  const attrs = `id="f-${id}" name="${id}" aria-required="${required}"`;
+  const cls = [S.ai[x.field_id] ? "ai" : "", required && !String(value).trim() ? "reqmiss" : ""].join(" ");
+  const hint = x.example === undefined ? "" : `placeholder="Ví dụ: ${esc(x.example)}"`;
+  let control;
+  if (x.ui === "select") {
+    control = `<select ${attrs}><option value="">Chọn…</option>${x.options.map((v) => `<option${v === value ? " selected" : ""}>${esc(v)}</option>`).join("")}</select>`;
+  } else if (x.ui === "textarea") {
+    control = `<textarea ${attrs} rows="2" ${hint}>${esc(value)}</textarea>`;
+  } else {
+    const type = x.ui === "datetime" ? "datetime-local" : x.ui === "number" ? "number" : "text";
+    const limits = ["min", "max"].filter((key) => x[key] !== undefined).map((key) => `${key}="${esc(x[key])}"`).join(" ");
+    control = `<input ${attrs} type="${type}" value="${esc(value)}" ${hint} ${type === "number" ? 'step="any"' : ""} ${limits}>`;
+  }
+  const measure = [x.min !== undefined && x.max !== undefined ? `${x.min}–${x.max}` : "", x.unit].filter(Boolean).join(" ");
+  return `<div class="f ${cls}"><label for="f-${id}">${esc(x.label)}${measure ? ` (${esc(measure)})` : ""}${required ? '<span class="req" aria-hidden="true">*</span>' : ""}</label>${control}
+    ${S.ai[x.field_id] ? "<small>Nháp từ giọng nói</small>" : ""}</div>`;
+}
+
 function formBlock(f) {
-  const req = new Set(f.required);
-  const inputs = f.fields.map((x) => {
-    const isReq = req.has(x.field_id) || x.required;
-    const v = S.draft[x.field_id] ?? "";
-    const cls = [S.ai[x.field_id] ? "ai" : "", isReq && !String(v).trim() ? "reqmiss" : ""].join(" ");
-    const type = x.ui === "number" ? "number" : x.ui === "datetime" ? "datetime-local" : "text";
-    return `<div class="f ${cls}"><label for="f-${esc(x.field_id)}">${esc(x.label)}${isReq ? '<span class="req" aria-label="bắt buộc">*</span>' : ""}</label>
-      <input id="f-${esc(x.field_id)}" name="${esc(x.field_id)}" type="${type}" value="${esc(v)}" ${x.ui === "number" ? 'step="any"' : ""}>
-      ${S.ai[x.field_id] ? "<small>Trợ lý điền từ giọng nói (nháp, chưa lưu)</small>" : ""}</div>`;
-  }).join("");
-  const empty = f.required.filter((k) => !String(S.draft[k] ?? "").trim());
+  const groups = new Map();
+  for (const field of f.fields) {
+    const group = field.group || "Nội dung phiếu";
+    if (!groups.has(group)) groups.set(group, []);
+    groups.get(group).push(fieldControl(field, !!field.required || f.required.includes(field.field_id)));
+  }
+  const inputs = [...groups].map(([group, fields]) => `<fieldset><legend>${esc(group)}</legend><div class="fields">${fields.join("")}</div></fieldset>`).join("");
   const rules = f.rules.map((r) => `<div class="rulebox"><span><b>${esc(r.clause)}</b> · ${esc(r.schedule)}</span><span class="src">“${esc(r.evidence)}”</span></div>`).join("");
   const tasks = f.tasks.map((t) => {
     const u = urg(t.due, t.status);
-    return `<div class="item"><span class="nm"><span>${esc(t.note || t.kind)}${t.missing_fields.length ? " · thiếu " + esc(t.missing_fields.join(", ")) : ""}</span><span class="why">${esc(t.role === "bac_si" ? "Bác sĩ" : "Điều dưỡng")}</span></span><span class="pill ${u.c}">${u.t}</span></div>`;
+    return `<div class="item"><span class="nm"><span>${esc(t.note || t.kind)}${t.missing_fields.length ? " · thiếu " + esc((t.missing_labels || t.missing_fields).join(", ")) : ""}</span><span class="why">${esc(t.role === "bac_si" ? "Bác sĩ" : "Điều dưỡng")}</span></span><span class="pill ${u.c}">${u.t}</span></div>`;
   }).join("");
-  const hist = f.records.slice(0, 5).map((r) => `<tr><td class="mono">${fmtT(r.at)}</td>${f.fields.slice(0, 3).map((x) => `<td>${esc(r.values[x.field_id] ?? "—")}</td>`).join("")}</tr>`).join("");
+  const hist = f.records.slice(0, 5).map((r) => `<details class="record"><summary><b class="mono">${fmtT(r.at)}</b> · ${esc(r.record_id)} · ${esc(S.users.find((u) => u.id === r.user)?.label || r.user || "Tài khoản mô phỏng")}</summary><dl>
+    ${f.fields.filter((x) => r.values[x.field_id] !== undefined).map((x) => `<div><dt>${esc(x.label)}</dt><dd>${esc(r.values[x.field_id])} ${esc(x.unit || "")}</dd></div>`).join("") || "<div>Chưa nhập nội dung.</div>"}</dl></details>`).join("");
   return `<div class="form">
     <div class="form-h"><h2>${esc(f.title)}</h2>${VOICE[f.form_id] ? `<button class="btn ghost sm" id="voice-open" type="button">Nhập bằng giọng nói</button>` : ""}</div>
     ${rules}${tasks ? `<div class="sec-h">Việc đang chờ</div>${tasks}` : '<p class="note">Không có việc đang chờ cho phiếu này.</p>'}
-    <div class="ba"><fieldset><legend>Nội dung phiếu</legend><div class="fields">${inputs}</div></fieldset></div>
-    <div class="savebar">${empty.length ? `<div class="reqwarn">Còn trống ${empty.length} trường bắt buộc: ${esc(empty.map((k) => (f.fields.find((x) => x.field_id === k) || {}).label || k).join(", "))}. Vẫn lưu được, nhắc việc sẽ tiếp tục.</div>` : '<div class="reqok">Đã đủ trường bắt buộc.</div>'}
+    <div class="form-h"><b>Nội dung phiếu <span class="muted">· ${f.fields.length} trường</span></b><button class="btn ghost sm" id="fill-sample" type="button">Điền mẫu vào ô trống</button></div>
+    <div class="ba">${inputs}</div>
+    ${hist ? `<div class="hist"><div class="sec-h">Các lần lưu gần nhất</div>${hist}</div>` : ""}
+    <div class="savebar"><div id="completeness" aria-live="polite">${completeness(f)}</div>
       <button class="btn" id="save" type="button">Lưu bản ghi</button></div>
-    ${hist ? `<div class="hist"><div class="sec-h">Các lần lưu gần nhất</div><div class="tablebox"><table><thead><tr><th>Giờ</th>${f.fields.slice(0, 3).map((x) => `<th>${esc(x.label)}</th>`).join("")}</tr></thead><tbody>${hist}</tbody></table></div></div>` : ""}
   </div>`;
 }
 
 async function saveRecord() {
   const f = S.detail.forms.find((x) => x.form_id === S.form);
   const values = {};
-  f.fields.forEach((x) => {
-    const el = document.querySelector(`[name="${x.field_id}"]`);
-    if (!el || el.value === "") return;
-    values[x.field_id] = el.type === "number" ? Number(el.value) : el.value;
-  });
+  for (const el of document.querySelectorAll(".fields [name]")) {
+    if (!el.reportValidity()) return;
+    if (el.value.trim()) values[el.name] = el.type === "number" ? Number(el.value) : el.value.trim();
+  }
+  $("save").disabled = true;
   try {
     const src = Object.keys(S.ai).length ? "voice" : "emr";
     const r = await api("/api/records", { patient_id: S.pt, form_id: S.form, values, user: S.user, source: src });
     const miss = r.record.missing_required;
-    toast(miss.length ? `Đã lưu, còn thiếu: ${miss.join(", ")}` : "Đã lưu bản ghi đầy đủ.");
+    toast(miss.length ? `Đã lưu, còn thiếu: ${miss.map((id) => f.fields.find((x) => x.field_id === id)?.label || id).join(", ")}` : "Đã lưu bản ghi đầy đủ.");
     resetVoice(); S.draft = {}; S.ai = {};
     await refreshAll();
   } catch (e) { toast("Lỗi: " + e.message); }
+  finally { if ($("save")) $("save").disabled = false; }
 }
 
 // ===== Trợ lý nổi: nhắc việc =====
@@ -187,7 +233,7 @@ function renderReminders() {
   b.innerHTML = bar + `<div class="rolebar">Việc của <b>${esc(RN[me().role] || "")}</b> · ${esc(me().label || "")}</div>
     <div class="summary"><span class="pill late">${late} quá hạn</span><span class="pill soon">${list.length - late} còn lại</span></div>
     ${Object.keys(byPt).length ? Object.entries(byPt).map(([pid, ts]) => `<div class="pt"><div class="pt-h"><b class="mono">${esc(pid)}</b><span class="dx">${esc(ts[0].patient)}</span></div>
-      ${ts.map((t) => { const u = urg(t.due, t.status); return `<button type="button" class="item" data-p="${esc(pid)}" data-f="${esc(t.form_id)}"><span class="nm"><span>${esc(t.form_title)}</span><span class="why">${esc(t.clause)}${t.note ? " · " + esc(t.note) : ""}${t.missing_fields.length ? " · thiếu " + esc(t.missing_fields.join(", ")) : ""}</span></span><span class="pill ${u.c}">${u.t}</span></button>`; }).join("")}</div>`).join("") : '<div class="empty-state">Không còn việc nào cho tài khoản này.</div>'}`;
+      ${ts.map((t) => { const u = urg(t.due, t.status); return `<button type="button" class="item" data-p="${esc(pid)}" data-f="${esc(t.form_id)}"><span class="nm"><span>${esc(t.form_title)}</span><span class="why">${esc(t.clause)}${t.note ? " · " + esc(t.note) : ""}${t.missing_fields.length ? " · thiếu " + esc((t.missing_labels || t.missing_fields).join(", ")) : ""}</span></span><span class="pill ${u.c}">${u.t}</span></button>`; }).join("")}</div>`).join("") : '<div class="empty-state">Không còn việc nào cho tài khoản này.</div>'}`;
   b.querySelectorAll("[data-s]").forEach((x) => (x.onclick = () => { S.rscope = x.dataset.s; renderPanel(); }));
   b.querySelectorAll(".item").forEach((x) => (x.onclick = () => openPatient(x.dataset.p, x.dataset.f)));
 }
@@ -205,11 +251,20 @@ async function ask(q) {
   const n = norm(q);
   const p = S.patients.find((x) => n.includes(x.patient_id.toLowerCase()));
   let html;
-  if (p) {
+  const current = S.detail?.forms.find((f) => f.form_id === S.form);
+  if (S.pt && current && !p && n.includes("phieu dang mo")) {
+    const record = current.records[0];
+    const draft = n.includes("nhap");
+    const values = draft ? S.draft : record?.values || {};
+    const entries = current.fields.filter((field) => String(values[field.field_id] ?? "").trim());
+    const rows = entries.map((field) => `<div><b>${esc(field.label)}</b> · ${esc(values[field.field_id])} ${esc(field.unit || "")}</div>`).join("");
+    const source = draft ? "Bản nháp đang nhập" : record ? "Bản ghi " + record.record_id + " · " + fmtT(record.at) : "Chưa có bản ghi";
+    html = `<b>${esc(S.pt)} · ${esc(current.title)}</b><div class="src">${esc(source)}</div>${rows || "Chưa có nội dung."}`;
+  } else if (p) {
     const d = await api("/api/patient?id=" + encodeURIComponent(p.patient_id));
     const ts = d.forms.flatMap((f) => f.tasks.map((t) => ({ ...t, form_title: f.title, form_id: f.form_id })));
     html = ts.length
-      ? `<div class="ans-lead"><b class="mono">${esc(p.patient_id)}</b> còn ${ts.length} việc:</div>` + ts.slice(0, 6).map((t) => `<button type="button" class="item" data-p="${esc(p.patient_id)}" data-f="${esc(t.form_id)}"><span>${esc(t.form_title)}${t.missing_fields.length ? " · thiếu " + esc(t.missing_fields.join(", ")) : ""}</span><span class="pill ${urg(t.due, t.status).c}">${urg(t.due, t.status).t}</span></button>`).join("") + `<div class="src">Nguồn: trạng thái hồ sơ và bộ luật ${esc(d.ruleset_version)}</div>`
+      ? `<div class="ans-lead"><b class="mono">${esc(p.patient_id)}</b> còn ${ts.length} việc:</div>` + ts.slice(0, 6).map((t) => `<button type="button" class="item" data-p="${esc(p.patient_id)}" data-f="${esc(t.form_id)}"><span>${esc(t.form_title)}${t.missing_fields.length ? " · thiếu " + esc((t.missing_labels || t.missing_fields).join(", ")) : ""}</span><span class="pill ${urg(t.due, t.status).c}">${urg(t.due, t.status).t}</span></button>`).join("") + `<div class="src">Nguồn: trạng thái hồ sơ và bộ luật ${esc(d.ruleset_version)}</div>`
       : `<div class="ans-lead"><b class="mono">${esc(p.patient_id)}</b> không còn việc nào.</div>`;
   } else if (/viec|lam gi|nhac|hom nay/.test(n)) {
     html = S.tasks.length
@@ -232,7 +287,8 @@ function renderChat() {
   b.innerHTML = S.chat.length
     ? `<div class="chat">${S.chat.map((m) => (m.me ? `<div class="msg me">${esc(m.me)}</div>` : `<div class="msg ai">${m.html}</div>`)).join("")}</div>`
     : `<div class="chat-empty"><b>Hỏi bằng lời thường, như hỏi đồng nghiệp.</b><span>Trợ lý đọc trạng thái hồ sơ và tra bộ luật đang áp dụng, rồi trả lời kèm nguồn.</span></div>`;
-  $("chips").innerHTML = CHIPS.map((c) => `<button type="button">${esc(c)}</button>`).join("");
+  const chips = S.pt ? ["Xem bản nháp phiếu đang mở", "Xem lần lưu cuối của phiếu đang mở", ...CHIPS] : CHIPS;
+  $("chips").innerHTML = chips.map((c) => `<button type="button">${esc(c)}</button>`).join("");
   $("chips").querySelectorAll("button").forEach((x) => (x.onclick = () => ask(x.textContent)));
   b.querySelectorAll(".item").forEach((x) => (x.onclick = () => openPatient(x.dataset.p, x.dataset.f)));
   b.scrollTop = b.scrollHeight;
@@ -244,7 +300,7 @@ const VOICE = window.VOICE_SAMPLES;
 function resetVoice() { S.voice = { st: "idle", segs: [] }; }
 
 function voiceShortcuts() {
-  return `<div class="voice-samples"><div class="sec-h">Chọn buổi mẫu</div>${Object.entries(VOICE).map(([id, sample]) =>
+  return `<div class="voice-samples"><div class="sec-h">Chọn buổi mẫu</div>${Object.entries(VOICE).filter(([id]) => !S.detail || S.detail.forms.some((f) => f.form_id === id)).map(([id, sample]) =>
     `<button type="button" class="item" data-voice-form="${esc(id)}"><span class="nm"><b>${esc(sample.title)}</b><span class="why">${esc(sample.description)}</span></span><span class="mono">${sample.segments.length} câu</span></button>`).join("")}</div>`;
 }
 
@@ -253,6 +309,11 @@ function bindVoiceShortcuts() {
     const pid = S.pt || S.patients[0]?.patient_id;
     if (!pid) return;
     try {
+      const detail = S.detail || await api("/api/patient?id=" + encodeURIComponent(pid));
+      if (!detail.forms.some((f) => f.form_id === el.dataset.voiceForm)) {
+        toast("Bộ quy định hiện tại chưa mở phiếu này.");
+        return;
+      }
       S.view = "v";
       await openPatient(pid, el.dataset.voiceForm);
       setOpen(true);
@@ -304,7 +365,7 @@ function renderVoice() {
       ${voiceLines(v.lines)}
       <div class="voice-result"><div class="sec-h">Kết quả trích xuất · chưa lưu</div>${Object.entries(v.draft).map(([key, value]) => `<div><span>${esc(form.fields.find((f) => f.field_id === key)?.label || key)}</span><b>${esc(value)}</b></div>`).join("") || '<p class="hint">Chưa nghe được giá trị phù hợp với ô nào.</p>'}</div>
       ${missing.length ? `<div class="reqwarn">Cần bổ sung: ${esc(missing.map((f) => f.label).join(", "))}.</div>` : '<div class="reqok">Đã đủ trường bắt buộc.</div>'}
-      <p class="hint">Các ô điền nháp đã hiện màu tím trên phiếu. Kiểm tra, sửa nếu cần, rồi bấm Lưu bản ghi.</p>
+      <p class="hint">Ô màu tím chứa giá trị từ hội thoại. Kiểm tra và sửa trên phiếu rồi bấm Lưu bản ghi.</p>
       <button type="button" class="btn ghost" id="vreset">Ghi buổi mới</button></div>`;
     $("vreset").onclick = () => { resetVoice(); renderPanel(); };
   }
@@ -400,12 +461,16 @@ async function runIngest(dry) {
   } catch (e) { $("pout").innerHTML = `<span class="late">${esc(e.message)}</span>`; }
 }
 async function runDetect(kind) {
-  const base = [{ label: "Mạch", ui: "number", required: true }, { label: "Nhịp thở", ui: "number", required: true }, { label: "Huyết áp", ui: "text" }, { label: "Nhiệt độ", ui: "number" }, { label: "SpO2", ui: "number" }];
-  const title = kind === "new" ? "Sàng lọc dinh dưỡng" : "Bảng theo dõi dấu hiệu sinh tồn cho người lớn";
-  const fields = kind === "near" ? [...base, { label: "Ghi chú", ui: "text" }]
-    : kind === "new" ? [{ label: "Cân nặng (kg)", ui: "number", required: true }, { label: "Ăn kém gần đây", ui: "checkbox" }, { label: "Sụt cân không chủ ý", ui: "select", options: ["Có", "Không"] }]
-    : base;
   try {
+    const { forms } = await api("/api/forms");
+    const known = forms.find((f) => f.form_id === "phieu_sinh_ton_nguoi_lon");
+    const title = kind === "new" ? "Sàng lọc dinh dưỡng" : known.title;
+    const fields = kind === "new" ? [
+      { label: "Cân nặng (kg)", ui: "number", required: true },
+      { label: "Ăn kém gần đây", ui: "checkbox" },
+      { label: "Sụt cân không chủ ý", ui: "select", options: ["Có", "Không"] },
+    ] : [...known.fields];
+    if (kind === "near" && !fields.some((f) => f.label === "Ghi chú")) fields.push({ label: "Ghi chú", ui: "text" });
     const r = await api("/api/detect", { method: "dom", title, fields });
     $("dout").innerHTML = `<div>${esc(r.title)} → <code>${esc(r.form_id)}</code> (v${r.version})</div><div>Cách khớp: <span class="pill later">${esc(r.match)}</span> · ${esc(r.action)}</div>`;
     await refreshAll();
@@ -415,6 +480,7 @@ async function runDetect(kind) {
 // ===== Tải lại toàn bộ dữ liệu =====
 async function refreshAll() {
   const st = await api("/api/state");
+  S.rules = null;
   S.clock = st.clock;
   S.patients = (await api("/api/patients")).patients;
   S.tasks = (await api("/api/tasks?user=" + encodeURIComponent(S.user))).tasks;

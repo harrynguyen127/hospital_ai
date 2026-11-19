@@ -18,6 +18,7 @@ DATA_DIR = ROOT / "data"
 RUNTIME_DIR = Path(os.environ.get("PROTO_RUNTIME_DIR", ROOT / ".runtime"))
 STATE_FILE = RUNTIME_DIR / "state.json"
 DEFAULT_NOW = "2026-11-16T10:00:00+07:00"
+FORM_SEED_VERSION = 3
 
 _lock = threading.RLock()
 _cache = None
@@ -33,7 +34,7 @@ def _seed_state():
         }
     pdata = json.loads((DATA_DIR / "patients_mock" / "patients.json").read_text(encoding="utf-8"))
     return {
-        "clock": DEFAULT_NOW, "forms": forms, "users": pdata["users"],
+        "clock": DEFAULT_NOW, "forms": forms, "form_seed_version": FORM_SEED_VERSION, "users": pdata["users"],
         "patients": pdata["patients"], "records": pdata["records"],
         "rulesets": [], "docs": {}, "audit": [],
     }
@@ -51,6 +52,21 @@ def _load():
     if _cache is None:
         if STATE_FILE.exists():
             _cache = json.loads(STATE_FILE.read_text(encoding="utf-8"))
+            if _cache.get("form_seed_version", 1) < FORM_SEED_VERSION:
+                seeds = _seed_state()["forms"]
+                for fid, form in _cache["forms"].items():
+                    if fid not in seeds:
+                        continue
+                    for version in [form, *form["history"]]:
+                        fields = {f["field_id"]: f for f in version["fields"]}
+                        updated = []
+                        for field in seeds[fid]["fields"]:
+                            previous = fields.pop(field["field_id"], {})
+                            updated.append({**previous, **field})
+                        version["fields"] = updated + list(fields.values())
+                        version["fingerprint"] = fingerprint(form["title"], version["fields"])
+                _cache["form_seed_version"] = FORM_SEED_VERSION
+                _write(_cache)
         else:
             _cache = _seed_state()
             _write(_cache)

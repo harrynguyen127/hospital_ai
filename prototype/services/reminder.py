@@ -73,7 +73,7 @@ def _rule_tasks(st, p, rule, now):
         return not missing_fields(r["values"], req)
 
     def latest(rs):
-        return max(rs, key=lambda r: _parse(r["at"])) if rs else None
+        return max(reversed(rs), key=lambda r: _parse(r["at"])) if rs else None
 
     def add(key, status, due, missing, note=""):
         out.append({
@@ -82,6 +82,7 @@ def _rule_tasks(st, p, rule, now):
             "rule_id": rule["rule_id"], "clause": rule["source"]["clause"], "form_id": fid, "form_title": title,
             "kind": kind, "status": status, "due": due.isoformat() if due else None,
             "missing_fields": missing, "note": note,
+            "missing_labels": [field["label"] for field in st["forms"][fid]["fields"] if field["field_id"] in missing],
         })
 
     evs = _events(p, rule)
@@ -112,9 +113,12 @@ def _rule_tasks(st, p, rule, now):
         if evs:
             start = _parse(evs[-1]["at"])
             after = since(start)
-            base = _parse(latest(after)["at"]) if after else start
+            last_complete = latest([r for r in after if complete(r)])
+            base = _parse(last_complete["at"]) if last_complete else start
             due = base + parse_duration(s["every"])
-            add("stream", "quá hạn" if now > due else "đang chờ", due, [], f"lặp mỗi {s['every']}")
+            last = latest(after)
+            add("stream", "quá hạn" if now > due else "đang chờ", due,
+                missing_fields(last["values"], req) if last else list(req), f"lặp mỗi {s['every']}")
     elif kind == "sequence":
         if evs:
             start = _parse(evs[-1]["at"])

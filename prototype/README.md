@@ -23,6 +23,14 @@ python features/policy_rules/test_policy.py
 
 Tính năng nối bản thật thế nào: xem [contracts/CONTRACTS.md](contracts/CONTRACTS.md). Khi chưa nối, server dùng bản mặc định và in trạng thái khi khởi động.
 
+## Thử ghi một phiếu mẫu
+
+Mở trực tiếp `web/index.html` hoặc chạy server rồi chọn **BN-01 → Bảng theo dõi dấu hiệu sinh tồn cho người lớn**. Mở bản ghi lúc **06:15** để xem chỉ số mẫu, thời điểm đo và tư thế. Với tài khoản điều dưỡng, hạn kế tiếp trong kịch bản này là **10:15**.
+
+Nhập thử một chỉ số rồi bấm **Điền mẫu vào ô trống**. Giá trị đã nhập được giữ lại, ô thời điểm dùng đồng hồ mô phỏng. Có thể sửa số đo, danh sách chọn và phần mô tả trước khi bấm **Lưu bản ghi**. Mở lịch sử dưới phiếu để xem lại từng trường. Lưu thiếu nhịp thở vẫn tạo bản ghi và giữ hạn nhắc sinh tồn trước đó. Lần lưu đủ mạch và nhịp thở bắt đầu chu kỳ tiếp theo.
+
+Có 10 mẫu phiếu với 191 trường nhập liệu. Mỗi phiếu có từ 17 đến 24 trường theo từng phần nghiệp vụ. Bấm **Điền mẫu vào ô trống** để xem trọn một lượt ghi nhận bằng dữ liệu giả. Bộ luật v1 hiển thị 8 phiếu trong hồ sơ. Áp dụng v2 để mở thêm phiếu giáo dục sức khỏe và đánh giá nguy cơ loét. Khi mở HTML trực tiếp, tải lại trang sẽ bắt đầu phiên mới. Server Python lưu bản ghi vào thư mục runtime của prototype.
+
 ## Kịch bản demo bắt buộc (A2 trong TEAM_ACTION_PLAN)
 
 1. Tab **Nhắc việc**, người dùng `bs_a` (bác sĩ): bộ luật **v1** → **13 việc**.
@@ -36,9 +44,12 @@ Mở `web/index.html` trực tiếp hoặc chạy server, chọn tab **Giọng n
 
 | Buổi mẫu | Nội dung thử | Kết quả khi nghe hết |
 |---|---|---|
-| Bệnh án vào viện | Bác sĩ, bệnh nhân và người nhà; thông tin định danh và câu ngoài lề | Nháp lý do vào viện và chẩn đoán |
-| Đánh giá ban đầu | Dị ứng, thuốc đang dùng, tiền sử, người liên hệ | Nháp 4 ô; tên và SĐT được che |
-| Dấu hiệu sinh tồn | Đọc 5 chỉ số rồi đọc lại mạch và huyết áp | Mạch 90, nhịp thở 20, huyết áp 118/76, nhiệt độ 37.2, SpO2 98 |
+| Bệnh án vào viện | Hỏi bệnh, khám ban đầu, bỏ câu ngoài lề | Nháp lý do vào viện, khám ban đầu và chẩn đoán |
+| Đánh giá ban đầu | Dị ứng, thuốc đang dùng, tiền sử, người liên hệ | Nháp dị ứng, thuốc, tiền sử, liên hệ, giao tiếp, dụng cụ mang theo và nhu cầu ưu tiên |
+| Dấu hiệu sinh tồn | Đọc 5 chỉ số, tư thế đo rồi đọc lại mạch và huyết áp | Mạch 90, nhịp thở 20, huyết áp 118/76, nhiệt độ 37.2, SpO2 98, tư thế nằm |
+| Đánh giá đau | Ghi điểm đau, vị trí, tính chất và hoàn cảnh đánh giá | Điểm 4, quanh vết mổ, âm ỉ khi nghỉ. Trợ lý nhắc bổ sung thời điểm đánh giá |
+
+Cả 10 phiếu có hội thoại mẫu. Hai phiếu giáo dục sức khỏe và nguy cơ loét dùng bộ luật v2. Trong tab **Hỏi đáp**, chọn **Xem bản nháp phiếu đang mở** hoặc **Xem lần lưu cuối của phiếu đang mở** để đối chiếu các trường của hồ sơ đang chọn.
 
 Bấm **Bắt đầu nghe (kịch bản mẫu)** để phát transcript theo người nói. Có thể **Dừng và xử lý** phần đã nghe hoặc **Hủy, không xử lý**. Khi hết buổi, giao diện tự tổng hợp, hiện các câu đã che định danh/bỏ ngoài lề và giá trị trích xuất. Các ô trên phiếu có màu tím, vẫn sửa được; chỉ **Lưu bản ghi** mới lưu. **Ghi buổi mới** giữ các ô đang nhập. Đổi bệnh nhân, phiếu hoặc tài khoản sẽ hủy buổi nghe đang chạy để tránh điền nhầm.
 

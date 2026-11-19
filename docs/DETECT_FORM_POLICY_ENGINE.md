@@ -244,6 +244,6 @@ prototype/
 
 ## 5. Kịch bản giọng nói trong prototype
 
-Giao diện có ba buổi hội thoại giả cho Bệnh án vào viện, Đánh giá ban đầu và Dấu hiệu sinh tồn, phù hợp schema hiện tại (chi tiết tại `prototype/README.md`). `web/voice-samples.js` chỉ chứa câu nói và vai người nói; không chứa kết quả điền sẵn. Từng câu đi qua `/api/voice` để che PII, lọc ngoài lề và trích xuất bằng regex trước khi hiển thị transcript. Vai người nói gán sẵn, chưa có STT/diarization thật; bộ lọc PII chỉ bao phủ mẫu tên, SĐT, CCCD đã hỗ trợ.
+Giao diện có 10 buổi mẫu tương ứng với 10 phiếu EMR. Mỗi câu đi qua `/api/voice` để che định danh mẫu, lọc câu ngoài lề và trích xuất theo kiểu trường. Trường danh sách chỉ nhận giá trị khớp một lựa chọn của phiếu. Hội thoại và vai người nói nằm trong `web/voice-samples.js`. Xem [hướng dẫn chạy mẫu](../prototype/README.md#thử-kịch-bản-giọng-nói).
 
 Luồng giao diện: chọn buổi → nghe transcript → dừng hoặc tự kết thúc → tổng hợp giá trị cuối cùng của mỗi ô → điền nháp → người dùng kiểm tra, sửa, lưu. Có thể hủy trước khi điền nháp. Đổi bệnh nhân, phiếu hoặc tài khoản vô hiệu buổi đang chạy; kết quả bất đồng bộ cũ không được điền vào ngữ cảnh mới. Kịch bản chạy được qua server Python và API giả lập trong trình duyệt, không gọi dịch vụ ngoài.

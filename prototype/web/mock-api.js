@@ -143,13 +143,14 @@
 
     const since = (t) => recs.filter((r) => msOf(r.at) >= t);
     const complete = (r) => missingFields(r.values, req).length === 0;
-    const latest = (rs) => rs.reduce((best, r) => (!best || msOf(r.at) > msOf(best.at) ? r : best), null);
+    const latest = (rs) => rs.reduce((best, r) => (!best || msOf(r.at) >= msOf(best.at) ? r : best), null);
     const add = (key, status, dueIso, missing, note = "") => {
       result.push({
         task_id: `${rule.rule_id}|${p.patient_id}|${key}`,
         patient_id: p.patient_id, patient: p.name || p.patient_id, bed: p.bed,
         rule_id: rule.rule_id, clause: rule.source.clause, form_id: fid, form_title: title,
         kind, status, due: dueIso ?? null, missing_fields: missing, note,
+        missing_labels: missing.map((id) => st.forms[fid].fields.find((f) => f.field_id === id)?.label || id),
       });
     };
     const late = (dueIso) => (nowMs > msOf(dueIso) ? "quá hạn" : "đang chờ");
@@ -179,11 +180,11 @@
         const last = evs[evs.length - 1];
         const start = msOf(last.at);
         const after = since(start);
-        const baseRec = after.length ? latest(after) : null;
+        const baseRec = latest(after.filter(complete));
         const baseMs = baseRec ? msOf(baseRec.at) : start;
         const baseOff = offOf(baseRec ? baseRec.at : last.at);
         const dueIso = isoAt(baseMs + parseDur(s.every), baseOff);
-        add("stream", late(dueIso), dueIso, [], `lặp mỗi ${s.every}`);
+        add("stream", late(dueIso), dueIso, missOf(latest(after)), `lặp mỗi ${s.every}`);
       }
     } else if (kind === "sequence") {
       if (evs.length) {
@@ -693,9 +694,13 @@
         if (f.ui === "number") {
           const m = /^[^\d]{0,12}(\d+(?:\.\d+)?)/.exec(rest);
           if (m) { res[f.field_id] = Number(m[1]); break; }
-        } else if (f.ui === "text") {
+        } else if (["text", "textarea", "select"].includes(f.ui)) {
           const m = /^\s*(?:là|:)?\s*([^.;,]+)/.exec(rest);
-          if (m && m[1].trim()) { res[f.field_id] = m[1].trim().slice(0, 120); break; }
+          if (m && m[1].trim()) {
+            const textValue = m[1].trim().slice(0, 120);
+            const value = f.ui === "select" ? f.options.find((o) => norm(o) === textValue) : textValue;
+            if (value !== undefined) { res[f.field_id] = value; break; }
+          }
         }
       }
     }
@@ -770,7 +775,7 @@
         if (rec.patient_id === pid && forms.has(rec.form_id)) forms.get(rec.form_id).records.push(rec);
       }
       for (const f of forms.values()) {
-        f.records.sort((a, b) => (a.at < b.at ? 1 : a.at > b.at ? -1 : 0));
+        f.records.reverse().sort((a, b) => (a.at < b.at ? 1 : a.at > b.at ? -1 : 0));
       }
       const v = activeRuleset(st);
       return {
@@ -809,6 +814,11 @@
         if (fieldIds.has(k) && v !== null && v !== undefined && v !== "") values[k] = v;
       }
       const required = form.fields.filter((f) => f.required).map((f) => f.field_id);
+      for (const rule of activeRules(st)) {
+        if (rule.form_id === fid) {
+          for (const id of rule.required_fields) if (!required.includes(id)) required.push(id);
+        }
+      }
       const missing = missingFields(values, required);
       const rec = {
         record_id: `REC-${String(st.records.length + 1).padStart(4, "0")}`, patient_id: pid, form_id: fid,

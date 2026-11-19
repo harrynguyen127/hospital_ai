@@ -109,6 +109,7 @@ def g_patient(q):
         if rec["patient_id"] == pid and rec["form_id"] in forms:
             forms[rec["form_id"]]["records"].append(rec)
     for f in forms.values():
+        f["records"].reverse()  # Cùng giờ mô phỏng: lần lưu sau hiển thị trước.
         f["records"].sort(key=lambda r: r["at"], reverse=True)
     return {"patient": {k: p[k] for k in ("patient_id", "name", "bed", "doctor", "nurse", "events")},
             "clock": st["clock"], "ruleset_version": (reminder.active_ruleset(st) or {}).get("version"),
@@ -177,6 +178,9 @@ def p_records(body):
         values = {k: v for k, v in (body.get("values") or {}).items()
                   if k in field_ids and v not in (None, "")}
         required = [f["field_id"] for f in form["fields"] if f.get("required")]
+        for rule in _active_rules(st):
+            if rule["form_id"] == fid:
+                required.extend(k for k in rule["required_fields"] if k not in required)
         missing = reminder.missing_fields(values, required)
         rec = {"record_id": f"REC-{len(st['records']) + 1:04d}", "patient_id": pid, "form_id": fid,
                "at": st["clock"], "values": values, "user": body.get("user"),
