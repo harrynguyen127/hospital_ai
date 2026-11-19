@@ -17,7 +17,8 @@ sys.path.insert(0, str(PROTOTYPE))
 
 from features.pii_filter.schema import EntityType, Identifiability, PolicyAction, SourceSpan, SubjectRole, TextInput
 from pii_runtime.evaluation.dataset import (
-    ClinicalAnnotation, ClinicalCategory, DatasetRecord, DatasetSplit, EntityAnnotation,
+    ClinicalAnnotation, ClinicalCategory, DATASET_VERSION, PREVIOUS_DATASET_VERSION,
+    DatasetRecord, DatasetSplit, EntityAnnotation,
     Exposure, PolicyAnnotation, ReviewAnnotation, ReviewReason, read_dataset,
     record_from_dict, record_to_dict, validate_dataset, write_dataset,
 )
@@ -103,6 +104,27 @@ class DatasetTests(unittest.TestCase):
         roles = {item.subject_role for record in self.records for item in record.entities}
         self.assertTrue({SubjectRole.PATIENT, SubjectRole.CLINICIAN, SubjectRole.RELATIVE}.issubset(roles))
         self.assertTrue(any(not record.entities and record.clinical for record in self.records))
+
+    def test_diagnosis_or_lab_result_category_is_versioned_and_prior_records_remain_readable(self):
+        old_record = replace(self.records[0], dataset_version=PREVIOUS_DATASET_VERSION)
+        self.assertEqual(record_from_dict(record_to_dict(old_record)), old_record)
+
+        text = "HIV dương tính"
+        source = TextInput(text=text, source_id="clinical-finding", source_revision="1")
+        annotation = ClinicalAnnotation(
+            span=SourceSpan(start=0, end=len(text)),
+            category=ClinicalCategory.DIAGNOSIS_OR_LAB_RESULT,
+            subject_role=SubjectRole.PATIENT,
+            assertion_id="clinical-finding-1",
+        )
+        with self.assertRaises(ValueError):
+            self.minimal(record_id="diagnosis-record", source=source,
+                         scenario_family="diagnosis-family", clinical=(annotation,),
+                         dataset_version=PREVIOUS_DATASET_VERSION)
+        current = self.minimal(record_id="diagnosis-record", source=source,
+                               scenario_family="diagnosis-family", clinical=(annotation,),
+                               dataset_version=DATASET_VERSION)
+        self.assertEqual(record_from_dict(record_to_dict(current)), current)
 
     def test_all_annotations_have_valid_original_source_bounds(self):
         for record in self.records:

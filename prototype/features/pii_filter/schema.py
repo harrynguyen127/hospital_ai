@@ -97,6 +97,8 @@ class ReasonCode(StrEnum):
     INDIRECT_IDENTIFICATION_RISK = "indirect_identification_risk"
     CLINICAL_REVIEW_REQUIRED = "clinical_review_required"
     CONTEXT_MISMATCH = "context_mismatch"
+    RESOURCE_LIMIT = "resource_limit"
+    UNSUPPORTED_CATEGORIES = "unsupported_categories"
 
 
 # These codes indicate pending review, incomplete evidence, or failed context.
@@ -115,6 +117,8 @@ UNRESOLVED_RISK_REASONS = frozenset({
     ReasonCode.INDIRECT_IDENTIFICATION_RISK,
     ReasonCode.CLINICAL_REVIEW_REQUIRED,
     ReasonCode.CONTEXT_MISMATCH,
+    ReasonCode.RESOURCE_LIMIT,
+    ReasonCode.UNSUPPORTED_CATEGORIES,
 })
 
 

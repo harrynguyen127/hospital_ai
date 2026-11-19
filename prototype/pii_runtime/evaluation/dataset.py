@@ -19,7 +19,9 @@ from features.pii_filter.schema import (
 )
 
 
-DATASET_VERSION = "vi-clinical-pii-dataset/1.0"
+PREVIOUS_DATASET_VERSION = "vi-clinical-pii-dataset/1.0"
+DATASET_VERSION = "vi-clinical-pii-dataset/1.1"
+SUPPORTED_DATASET_VERSIONS = frozenset({PREVIOUS_DATASET_VERSION, DATASET_VERSION})
 
 
 class DatasetSplit(StrEnum):
@@ -40,6 +42,7 @@ class ClinicalCategory(StrEnum):
     VITAL_SIGN = "vital_sign"
     NEGATION = "negation"
     SYMPTOM = "symptom"
+    DIAGNOSIS_OR_LAB_RESULT = "diagnosis_or_lab_result"
     TEMPORAL = "temporal"
     FAMILY_HISTORY = "family_history"
     SUBJECT_ATTRIBUTION = "subject_attribution"
@@ -137,7 +140,7 @@ class DatasetRecord:
         self.source.__post_init__()
         if type(self.seed) is not int or not 0 <= self.seed < 2**64:
             raise ValueError("seed must be an unsigned 64-bit integer, excluding booleans")
-        if self.dataset_version != DATASET_VERSION or self.provenance != "project_synthetic":
+        if self.dataset_version not in SUPPORTED_DATASET_VERSIONS or self.provenance != "project_synthetic":
             raise ValueError("unsupported dataset version or provenance")
         require_enum(self.split, DatasetSplit)
         require_enum(self.exposure, Exposure)
@@ -160,6 +163,9 @@ class DatasetRecord:
                 annotation.span.validate_for(self.source)
             if len(set(annotations)) != len(annotations):
                 raise ValueError("duplicate ground-truth annotations")
+        if (self.dataset_version == PREVIOUS_DATASET_VERSION
+                and any(item.category is ClinicalCategory.DIAGNOSIS_OR_LAB_RESULT for item in self.clinical)):
+            raise ValueError("new clinical categories require dataset version 1.1")
         entity_spans = {annotation.span for annotation in self.entities}
         policy_spans = [annotation.span for annotation in self.policies]
         if set(policy_spans) != entity_spans or len(set(policy_spans)) != len(policy_spans):

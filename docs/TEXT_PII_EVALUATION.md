@@ -3,10 +3,10 @@
 ## Implemented foundation and limits
 
 PII-01 implements gold-data contracts, JSONL validation, leakage heuristics and
-a small deterministic development generator. Metric scoring, model inference,
-benchmark execution, clinical qualification, and production authorization are
-not implemented. This document specifies their future evaluation protocol.
-No new model performance is reported and no NLP model has been selected.
+a small deterministic development generator. PII-02 adds a deterministic exposed
+development comparison for the new rules-only engine and team regex prototype.
+Model inference, independent clinical qualification and production authorization
+are not implemented. No NLP model has been selected or benchmarked.
 
 Historical model experiments, repository tests, model-card examples, and phrases
 already discussed with developers are exposed evidence. They must not be
@@ -269,3 +269,129 @@ Generation reproducibility, split-integrity, external JSONL round-trip and CLI
 integration checks are included in the dataset tests. Test outputs use external
 temporary directories and are removed afterward. Use explicit discovery roots:
 the repository uses namespace-style directories rather than package initializers.
+
+## PII-02 measured exposed-development comparison
+
+Executed with Python 3.12, generator version `synthetic-development/1.0`, seed 17,
+and the same 20 records for both systems. Reproduce from `prototype/`:
+
+```bash
+python3.12 -B -m pii_runtime.evaluation.evaluate_rules --seed 17
+```
+
+The command emits aggregate JSON to stdout and creates no dataset/report files.
+The legacy tuple API has no native source findings: the evaluator replays its
+exact substitutions with character-origin tracking, types spans by the original
+placeholder rule, and asserts output/count equality to unchanged `pii.mask`.
+There is no approximate diff alignment. Legacy exact-span metrics therefore
+refer to substitution spans, including any accidentally replaced whitespace or
+clinical words. They are not an independent NER evaluation. Full required-span
+coverage is the common output-oriented measure. Duplicate predictions use
+one-to-one matching; overlap uses maximum-cardinality matching. F1 is
+`2*TP/(predicted+gold)`; unavailable denominators are N/A.
+
+Percentages below are measured values on this exposed corpus only:
+
+| Category | Gold | New exact P / R / F1 (%) | Legacy substitution P / R / F1 (%) | Overlap TP new / legacy | Required full coverage new vs legacy |
+| --- | ---: | --- | --- | --- | --- |
+| ADDRESS | 1 | N/A / 0.00 / 0.00 | N/A / 0.00 / 0.00 | 0 / 0 | 0/1 vs 0/1 |
+| DATE | 1 | N/A / 0.00 / 0.00 | N/A / 0.00 / 0.00 | 0 / 0 | N/A: preserve/review policy |
+| DATE_OF_BIRTH | 1 | 100.00 / 100.00 / 100.00 | N/A / 0.00 / 0.00 | 1 / 0 | 1/1 vs 0/1 |
+| HEALTH_INSURANCE_ID | 1 | N/A / 0.00 / 0.00 | N/A / 0.00 / 0.00 | 0 / 0 | 0/1 vs 0/1 |
+| ORGANIZATION | 1 | N/A / 0.00 / 0.00 | N/A / 0.00 / 0.00 | 0 / 0 | N/A: preserve/review policy |
+| PATIENT_ID | 2 | 100.00 / 50.00 / 66.67 | N/A / 0.00 / 0.00 | 1 / 0 | 1/2 vs 0/2 |
+| PERSON | 7 | 100.00 / 57.14 / 72.73 | 33.33 / 14.29 / 20.00 | 4 / 1 | 4/6 vs 1/6 |
+| PHONE | 5 | 100.00 / 100.00 / 100.00 | 100.00 / 80.00 / 88.89 | 5 / 4 | 5/5 vs 4/5 |
+| RARE_CONTEXT | 1 | N/A / 0.00 / 0.00 | N/A / 0.00 / 0.00 | 0 / 0 | N/A: preserve/review policy |
+
+New engine full required-identifier coverage: **11/16**; legacy: **5/16**.
+All 20 new results are REVIEW_REQUIRED, zero requests FAILED. Both systems were
+compared over 191 protected clinical code points: new engine replaced **0/191**,
+legacy **4/191** (2.09%). These are character-level observations, not proof of
+clinical semantic correctness or negation-scope safety.
+
+The new rules-only supported-category redaction coverage on these records is
+**11/14** (PERSON, PHONE, PATIENT_ID and DATE_OF_BIRTH required redactions); the
+all-required denominator is **16**, including unsupported BHYT and address.
+The legacy trace supports only PHONE, NATIONAL_ID and PERSON here, with **5/11**
+redactions among identifiers in those categories, versus **5/16** overall.
+Coverage counts are output-span based and do not imply privacy qualification.
+
+Key misses include names without supported cues, the technical NFD-name fixture
+without an ordinary name cue, the ambiguous uncued given name, BHYT and addresses.
+Lowercase ASR-style names are now redacted when an explicit cue, supported
+Vietnamese surname structure and a resolvable boundary agree; unresolved
+homographs remain review cases. A bare patient-ID mention without an explicit
+label is missed. NATIONAL_ID, ENCOUNTER_ID and EMAIL have unit tests but no positive
+examples in this 20-record corpus; no development recall claim is made for them.
+Fourteen taxonomy categories have no built-in recognizer. Review-policy and
+preserve-policy entities still count in recognition metrics, but are excluded
+from the required-redaction denominator. There is no winner/qualification claim.
+
+## Role-aware transcript scenario evaluation
+
+Two additional small fixtures live in
+`prototype/pii_runtime/evaluation/workflow_scenarios.py` and are evaluated
+separately with:
+
+```bash
+python3.12 -B -m pii_runtime.evaluation.evaluate_workflows
+```
+
+`DOCTOR_PATIENT_CONVERSATION` contains a doctor asking for identity, patient
+self-introduction and repeated reference, spoken DOB words, family-member
+identification, hesitation, medication/dose, negation, symptom duration,
+correction, and a phone value under an unknown speaker. Its expected local state
+is REVIEW_REQUIRED. The unknown speaker's metadata is `None`; speaker role and
+entity subject role are separate fields, and neither is passed to `TextInput`.
+
+`NURSE_CHART_READBACK` contains adjacent name, SpO2, patient/encounter IDs, a
+patient name before a medication/dose, unsupported BHYT, numeric DOB, diagnosis,
+vital values, and a long protected note. A test-only detector replaces only the
+`ABC` prefix of the synthetic BHYT value to ensure the remaining digits count as
+partial-identifier leakage and trigger residual-risk review. This injection is
+failure-test evidence, not a claimed BHYT recognizer. Its expected local state
+is also REVIEW_REQUIRED.
+
+Current deterministic output on the exposed fixtures keeps rules-only results
+separate from the test-only partial-span fault injection:
+
+| Scenario / run | Exact detection TP / predictions / gold | Precision / recall | Supported redaction | All-required redaction | Clinical over-redaction | Partial identifier leakage | Unsupported | Review / failure |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| DOCTOR_PATIENT_CONVERSATION / rules-only | 4 / 4 / 5 | 100% / 80% | 4/4 (100%) | 4/5 (80%) | 0/152 | 0 | 1 spoken DOB | 1/1; 0/1 |
+| NURSE_CHART_READBACK / rules-only | 5 / 5 / 6 | 100% / 83.33% | 5/5 (100%) | 5/6 (83.33%) | 0/1,519 | 0 | 1 BHYT format | 1/1; 0/1 |
+| NURSE_CHART_READBACK / injected prefix | 5 / 6 / 6 | 83.33% / 83.33% | 5/5 (100%) | 5/6 (83.33%) | 0/1,519 | 1 BHYT suffix | 1 BHYT format | 1/1; 0/1 |
+
+The injected run deliberately adds only the `ABC` prefix span for the synthetic
+BHYT value. Exact-span matching correctly counts that prefix as an FP and leaves
+the full unsupported gold entity as an FN. It is a fault-injection result, not
+the standalone rules-only precision. The unsupported identifier remains
+unredacted by the rules-only engine and is never counted as sanitized. All runs
+report residual risk, require local review, and prohibit outbound use.
+
+The evaluator emits prediction span coordinates, supported-category and
+all-required coverage, known unsupported identifiers, clinical over-redaction,
+residual leakage, review and failure states separately for each run. Exact
+detection is typed, one-to-one matching. There is one project-authored synthetic
+fixture per workflow; these exposed fixtures are not statistically
+representative, independently blinded, real-clinical performance, or engine
+qualification.
+
+PII-02 verification after the targeted boundary/residual fixes and workflow
+fixtures: **159** feature tests and **80** runtime/evaluation tests pass. The
+prototype regression suites also pass: voice **8**, form detection **6**, policy
+**6**, and isolation/scenario **13**. Total: **272 tests**, including the 146
+pre-existing tests, with zero failures/errors/skips.
+
+```bash
+python3.12 -B -m unittest discover -s features/pii_filter -p 'test*.py' -v
+python3.12 -B -m unittest discover -s pii_runtime/tests -p 'test*.py' -v
+python3.12 -B -m unittest discover -s features/voice_input -p 'test*.py' -v
+python3.12 -B -m unittest discover -s features/detect_form -p 'test*.py' -v
+python3.12 -B -m unittest discover -s features/policy_rules -p 'test*.py' -v
+python3.12 -B -m unittest discover -s tests -p 'test*.py' -v
+python3.12 -B -m pii_runtime.evaluation.evaluate_workflows
+```
+
+The last command reports the two workflow scenarios independently; it does not
+modify or replace the original 20-record development benchmark above.

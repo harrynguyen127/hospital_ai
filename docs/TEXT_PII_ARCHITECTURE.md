@@ -1,8 +1,8 @@
-# Text PII Architecture: PII-01 Foundation
+# Text PII Architecture: PII-01 Foundation and PII-02 Local Engine
 
 ## Status and ownership
 
-**PII-01 foundation implemented; official detection engine NOT IMPLEMENTED.**
+**PII-01 complete; PII-02 rules-only local engine implemented for review. Not production-qualified.**
 
 The [team regex prototype](../prototype/features/pii_filter/pii.py) and its
 `pii.mask(text) -> (str, int)` registry contract remain unchanged. They are not
@@ -22,6 +22,13 @@ execution remain outside this feature. No teammate-owned module is changed.
 - [generate_synthetic.py](../prototype/pii_runtime/evaluation/generate_synthetic.py):
   a deterministic, exposed, 20-record development corpus generated on demand.
 - Contract and evaluation-data tests; no model dependencies or artifacts.
+- PII-02 `normalization.py`, `rules.py`, `aggregation.py`, `deidentification.py`,
+  `risk.py` and `engine.py` under the pure feature, with component/failure tests.
+- [evaluate_rules.py](../prototype/pii_runtime/evaluation/evaluate_rules.py):
+  reproducible exposed-development comparison against the unchanged prototype.
+- [workflow_scenarios.py](../prototype/pii_runtime/evaluation/workflow_scenarios.py)
+  and [evaluate_workflows.py](../prototype/pii_runtime/evaluation/evaluate_workflows.py):
+  exposed role-aware synthetic dialogue/readback fixtures and separate scenario metrics.
 
 The optional `pii_runtime` namespace currently contains evaluation tools only.
 It does not provide inference. Namespace packages follow the existing repository
@@ -30,7 +37,9 @@ layout; empty package initializers and placeholder modules are unnecessary.
 ## Versions and taxonomy
 
 `SCHEMA_VERSION = text-pii/1.0`; `TAXONOMY_VERSION = vi-clinical-pii/1.0`.
-`DATASET_VERSION = vi-clinical-pii-dataset/1.0` is versioned independently.
+`DATASET_VERSION = vi-clinical-pii-dataset/1.1` is versioned independently;
+existing 1.0 records remain readable, while the new clinical-result category
+requires 1.1.
 Unknown versions and unknown enum values are rejected, not coerced.
 
 | Entity type | Typical identifying context; not an automatic masking rule |
@@ -112,9 +121,19 @@ must never reuse a source ID/revision for different content. Revision binding
 is not cryptographic authentication. PII-01 does not maintain an identity store
 or verify the truth of caller-provided patient/session context.
 
-Reversible NFC/segmentation mappings, grapheme-safe expansion, and normalization
-of spoken numbers are future PII-02 work. PII-01 neither transforms text nor
-claims that arbitrary tokenizer offsets are original-source offsets.
+PII-02 implements canonical NFC/NFD views. Source segments group starters with
+following combining marks and retain cross-starter canonical compositions
+(including Hangul). Each analysis code point maps to its whole original segment.
+Construction verifies both whole-string normalization and the complete mapping;
+the rules boundary revalidates supplied views. No substring search or approximate
+alignment recovers offsets. Bounds/revision/content mismatch fails explicitly.
+
+Redaction boundaries expand to whole normalization segments, preventing residual
+combining marks. This is not a full Unicode extended-grapheme/ZWJ segmenter.
+Whitespace, punctuation, corrections and clinical values outside replacement
+spans remain exactly as supplied. Word segmentation/tokenizer alignment remains
+unimplemented. Spoken phone recognition only maps explicit digit-word spans;
+it does not rewrite source numbers.
 
 ## Untrusted detector-output boundary
 
@@ -135,9 +154,8 @@ is rejected. Validation occurs before a consumer may use any finding.
 Processed-range coverage does not mean entity recall or privacy safety.
 Declared category support is also a capability claim to be benchmarked.
 The function raises sanitized `TypeError` or `ValueError`; no invalid finding is
-silently dropped. A future orchestrator must catch boundary failure, produce a
-failed/partial assessment, and prohibit outbound use. That orchestration is not
-implemented. This in-process validator does not defend against arbitrary code
+silently dropped. The PII-02 orchestrator catches boundary failures, emits failed
+reports/results, and prohibits outbound use. This in-process validator does not defend against arbitrary code
 execution by a malicious Python plugin.
 
 ## Assessment and gateway boundary
@@ -155,6 +173,9 @@ identification risk, clinical review required, and context mismatch as unresolve
 evidence. The same classification applies to assessment and decision reasons.
 `UNQUALIFIED_PROFILE` records a qualification limitation and is not an execution
 failure. No decision action implicitly resolves an unresolved reason.
+PII-02 adds RESOURCE_LIMIT and UNSUPPORTED_CATEGORIES to the closed reason enum
+and unresolved set without changing the seven PII-01 dataclass shapes, taxonomy,
+registry or legacy behavior. Existing contract tests remain intact.
 
 | Decision evidence | Assessment status | Outbound restriction |
 | --- | --- | --- |
@@ -206,8 +227,97 @@ The legacy file, tests, placeholders, count behavior, registry slot, and README
 compatibility instructions are preserved. The foundation registers no new slot
 and does not replace the prototype's behavior.
 
-PII-02 may start only after review of these contracts, annotation semantics, and
-evaluation protocol. It should implement mapped normalization, deterministic
-recognizers, aggregation, explicit policy and rendering, and minimal local risk
-orchestration. NER adapters, model selection, pseudonymization, and gateway work
-remain separate later phases. See the [evaluation protocol](TEXT_PII_EVALUATION.md).
+PII-02 is implemented behind its own `process_text(TextInput, *, extra_detectors=(),
+limits=EngineLimits()) -> PrivacyResult` API. It is not connected to the registry.
+NER adapters, model selection, pseudonymization and gateway remain later phases.
+See the [evaluation protocol](TEXT_PII_EVALUATION.md) for measured development
+results and all limits on their interpretation.
+
+## PII-02 actual supported rules
+
+| Category | Implemented formats and constraints |
+| --- | --- |
+| PHONE | Vietnamese-style 10-digit mobile shapes starting 03/05/07/08/09; 11-digit 02 landline shapes; corresponding +84 shapes; single spaces/dots/hyphens between digits; bounded boundaries |
+| PHONE, spoken | Exactly ten individual Vietnamese digit words after a phone cue; mobile shape validation; no general spoken-number grammar |
+| NATIONAL_ID | Explicit CCCD/CMND/citizen-ID cues plus 9 or 12 digits, optionally separated; shape only, no authenticity/checksum/legal-status validation |
+| EMAIL | Practical local-part/ASCII-domain pattern; not complete RFC or international mailbox coverage |
+| PATIENT_ID | Explicit patient-ID label plus an ASCII alphanumeric/hyphen/underscore token containing a digit, at most 40 characters |
+| ENCOUNTER_ID | Explicit visit/encounter label plus the same bounded token grammar |
+| DATE_OF_BIRTH | Explicit birth-date cue plus numeric day/month/year and calendar validation |
+| PERSON | Explicit patient/clinician/relative/title cue, a limited surname vocabulary, and bounded Vietnamese name tokens; clinical abbreviations, alphanumeric vital-sign forms, and dose/unit structure terminate a name before adjacent clinical content |
+
+Lowercase contextual names or uncertain boundaries may produce AMBIGUOUS
+findings with a REVIEW decision, not confident redactions. `Bệnh nhân là` and
+unaccented equivalents are supported linking forms. `Mã bệnh nhân` is treated
+as an identifier cue rather than a person-name cue. Name boundaries use
+alphanumeric clinical-token recognition, medication dose/unit structure, a
+limited clinical-abbreviation set, name-shape constraints and punctuation. An
+unfamiliar adjacent capitalized token that cannot be segmented reliably remains
+visible in a review span. Names without reliable cues, rare surnames, unusual
+punctuation and unsupported formats may still be missed or misclassified.
+There is no address/BHYT/passport recognizer or hospital-specific format knowledge.
+Supported category declarations do not assert full recall for those categories.
+
+### Workflow scenario fixtures
+
+The evaluation layer has separate exposed synthetic fixtures for
+`DOCTOR_PATIENT_CONVERSATION` and `NURSE_CHART_READBACK`; they exercise the same
+text-only engine. `speaker_role` is sidecar fixture metadata and may be `None`.
+Ground-truth `subject_role` independently describes whose identity an entity
+represents. Neither field is inferred or required by `TextInput`, and unknown
+speaker metadata never disables text detection. The fixtures retain offsets in
+the complete original transcript, label spoken DOB and BHYT formats as known
+unsupported cases, and preserve protected medication, dose, vital, negation,
+temporal, family-history and attribution spans. A test-only partial detector in
+the nurse scenario deliberately replaces only an identifier prefix to verify
+that the residual assessor reports the visible suffix. These exposed fixtures
+are not blind evidence, model evaluation, or clinical qualification.
+
+## Aggregation, policy and rendering
+
+All report types, revisions, categories, provenance and coverage are checked before
+sorting/deduplication. Counts are bounded before deduplication. Exact duplicate
+findings collapse only within the derived groups; original reports remain in
+the result. Distinct detector evidence is preserved. Overlaps expand to canonical
+source-segment boundaries and form connected union groups; touching spans stay
+separate. Type or known-subject-role conflicts remain UNRESOLVED_CONFLICT.
+
+The versioned policy `text-pii-redaction/1.0` redacts direct identifier groups.
+Ambiguous or context-dependent groups require review and remain visible locally.
+A group of conflicting direct identifier types may be conservatively redacted,
+but its conflict reason still requires review. Dates/organizations are never
+automatically treated as PERSON. PSEUDONYMIZE is rejected, not implemented as an alias.
+
+The renderer validates every decision before output, rejects mixed-action
+overlaps, merges same-action overlaps, and performs a single pass over the
+original source. It uses a constant `[PII]`, not patient-derived identifiers.
+
+## Risk, failures and resource limits
+
+Profile `vi-text-rules-review/2.1` inspects detector status, processed ranges,
+declared category coverage, group conflicts and review decisions. It also scans
+the local output with the same rules and selected unsupported-identifier cues.
+This residual scan is correlated with first-pass detection and cannot establish
+anonymity or indirect re-identification safety. A cue followed by `[PII]` is
+still flagged when alphanumeric content remains anywhere in the cue's remaining
+value; the marker alone does not establish complete identifier removal.
+
+The default profile always includes UNQUALIFIED_PROFILE, and includes
+UNSUPPORTED_CATEGORIES when the union of declared support omits taxonomy types.
+Successful rules-only requests are REVIEW_REQUIRED; valid incomplete detector
+reports produce PARTIAL. Processing failures produce FAILED with output_text=None,
+never raw-text fallback or a misleading sanitized-success payload. Failure
+handling does not repeat the failing normalization/rendering stage. All results
+are outbound PROHIBITED with external_egress_authorized=False.
+
+Default limits are 32,000 original code points, 512 total raw findings, and four
+extra detectors. Configurable hard ceilings are 200,000, 4,096 and eight,
+respectively. Oversized inputs are rejected before normalization; finding limits
+apply to both individual/combined reports before deduplication.
+
+`DetectorSpec` is a trusted synchronous callback/test seam, not a model adapter.
+Exceptions, invalid types/labels/offsets, stale revisions, declaration mismatches
+and missing coverage have explicit failure/partial outcomes. Callback count is
+bounded, but arbitrary callback CPU time/allocations cannot be preempted in this
+pure in-process API. Hard timeouts and process isolation are future runtime work.
+The default path loads no callbacks/models, calls no network, and keeps no state.
