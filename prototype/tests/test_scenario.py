@@ -224,6 +224,63 @@ class ScenarioTests(unittest.TestCase):
         self.assertEqual(payload["pii_masked"], 2)
         self.assertEqual(send_filtered(payload), {"sent": False, "reason": "prototype: API ngoài chưa được bật"})
 
+    # --- Tích hợp PII-02 & Policy multi-category ---
+    def test_pii02_adapter_connected_and_legacy_baseline_unchanged(self):
+        from contracts import registry
+        from services import pii_adapter
+
+        # Baseline pii.py giữ nguyên 3 pattern gốc để không vỡ pii_runtime/tests/test_evaluate_rules.py
+        self.assertEqual(len(pii.PII), 3)
+        self.assertIs(registry.get("pii.mask"), pii_adapter.mask)
+
+        form = store.read()["forms"]["phieu_sinh_ton_nguoi_lon"]
+        res = engine.voice_process(
+            "Bệnh nhân Nguyễn Văn An, email an.nguyen@example.vn, mã bệnh nhân BN-2026-009, "
+            "số điện thoại không chín một hai ba bốn năm sáu bảy tám. Mạch 88, SpO2 98.",
+            form,
+        )
+        self.assertNotIn("Nguyễn Văn An", res["masked"])
+        self.assertNotIn("an.nguyen@example.vn", res["masked"])
+        self.assertNotIn("BN-2026-009", res["masked"])
+        self.assertNotIn("không chín một hai", res["masked"])
+        self.assertIn("[TÊN]", res["masked"])
+        self.assertIn("[SĐT]", res["masked"])
+        self.assertIn("[PII]", res["masked"])
+        self.assertEqual(res["pii_assessment"]["engine"], "pii-02-rules-review")
+        self.assertEqual(res["pii_assessment"]["status"], "review_required")
+        self.assertFalse(res["pii_assessment"]["external_egress_authorized"])
+        self.assertEqual(res["extracted"]["mach"], 88)
+        self.assertEqual(res["extracted"]["spo2"], 98)
+
+    def test_pii02_adapter_preserves_clinical_terms_and_vietnamese_names(self):
+        form = store.read()["forms"]["phieu_cham_soc"]
+        res_clin = engine.voice_process("Bệnh nhân SpO2 98%, Đau bụng nhẹ.", form)
+        self.assertIn("SpO2 98%", res_clin["masked"])
+        self.assertIn("Đau bụng", res_clin["masked"])
+
+        res_name = engine.voice_process("tên bệnh nhân là lý phương bảo ca trực là ca sáng", form)
+        self.assertIn("[TÊN]", res_name["masked"])
+        self.assertNotIn("lý phương bảo", res_name["masked"].lower())
+        self.assertEqual(res_name["extracted"]["ten_benh_nhan"], "[TÊN]")
+        self.assertEqual(res_name["extracted"]["ca_truc"], "Ca sáng")
+
+    def test_policy_multi_category_validation_and_emergency_trigger_on_voice_draft(self):
+        form = store.read()["forms"]["phieu_sinh_ton_nguoi_lon"]
+        normal = engine.voice_process("Mạch 88, nhịp thở 20, huyết áp 120 trên 80, SpO2 98.", form)
+        self.assertEqual(normal["validation_warnings"], [])
+        self.assertEqual(normal["policy_alerts"], [])
+
+        invalid = engine.voice_process("Mạch 250, huyết áp 80 trên 120, SpO2 45.", form)
+        warn_fields = {w["field"] for w in invalid["validation_warnings"]}
+        self.assertEqual(warn_fields, {"mach", "spo2", "huyet_ap"})
+        self.assertTrue(any(a["rule_id"] == "POL-TRIGGER-01" for a in invalid["policy_alerts"]))
+
+        urgent = engine.voice_process("Mạch 132, huyết áp 110 trên 70, SpO2 87.", form)
+        self.assertEqual(urgent["validation_warnings"], [])
+        self.assertEqual(len(urgent["policy_alerts"]), 1)
+        self.assertEqual(urgent["policy_alerts"][0]["rule_id"], "POL-TRIGGER-01")
+        self.assertEqual(urgent["policy_alerts"][0]["alert_level"], "RED")
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

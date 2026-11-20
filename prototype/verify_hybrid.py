@@ -13,15 +13,17 @@ ROOT = Path(__file__).resolve().parent
 sys.path.insert(0, str(ROOT))
 
 from contracts import registry
-from features.pii_filter import pii
-from features.voice_input import external_api, stt, voice
+from features.voice_input import external_api
+from services import engine
 
 FORM = {
+    "form_id": "phieu_sinh_ton_nguoi_lon",
     "fields": [
+        {"field_id": "ten_benh_nhan", "label": "Tên bệnh nhân", "ui": "text"},
         {"field_id": "mach", "label": "Mạch", "ui": "number"},
         {"field_id": "huyet_ap", "label": "Huyết áp", "ui": "text"},
         {"field_id": "nhiet_do", "label": "Nhiệt độ", "ui": "number"},
-    ]
+    ],
 }
 
 SAMPLE_VOICE = "Bệnh nhân Nguyễn Văn An, số điện thoại 0912345678, mạch 88, huyết áp 120 trên 80, nhiệt độ 37 phẩy 2"
@@ -37,9 +39,9 @@ def test_mode_1_local():
     registry.disconnect("voice.send")
     registry.define("voice.send", external_api.send_disabled)
 
-    result = voice.process(SAMPLE_VOICE, FORM, mask_fn=pii.mask)
-    print("[+] Bước 1 (Lọc PII Local): Đã che ->", result["masked"])
-    print(f"[+] Số chỗ đã che định danh: {result['pii_masked']} (SĐT & Tên)")
+    result = engine.voice_process(SAMPLE_VOICE, FORM)
+    print("[+] Bước 1 (Lọc PII-02 Local): Đã che ->", result["masked"])
+    print(f"[+] Số chỗ đã che định danh: {result['pii_masked']} (SĐT & Tên) | trạng thái PII-02: {result.get('pii_assessment')}")
     print("[+] Bước 2 (Kiểm tra slot voice.send): Trạng thái -> MẶC ĐỊNH (TẮT API)")
     print("[+] Bước 3 (Bóc tách Local tại máy): Dùng regex + từ điển y khoa")
     print(f"[+] KẾT QUẢ ĐIỀN NHÁP (LOCAL): {result['extracted']}")

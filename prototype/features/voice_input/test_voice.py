@@ -426,6 +426,26 @@ class PhoWhisperSttTests(unittest.TestCase):
         self.assertEqual(ext["kham_bung"], "mềm ấn tức nhẹ")
         self.assertEqual(ext["chan_doan"], "theo dõi viêm dạ dày cấp")
 
+    def test_extracts_pii02_placeholder_uppercase(self):
+        """Hỗ trợ placeholder chuẩn [PII] của PII-02 bên cạnh [TÊN]/[SĐT]/[CCCD]."""
+        form = {"fields": [
+            {"field_id": "ten_benh_nhan", "label": "Tên bệnh nhân", "ui": "text"},
+            {"field_id": "nguoi_lien_he", "label": "Người liên hệ", "ui": "text"},
+            {"field_id": "mach", "label": "Mạch", "ui": "number"},
+        ]}
+        pii02_fake = lambda s: (
+            s.replace("Nguyễn Văn An", "[PII]").replace("Trần Thị Bình", "[PII]"),
+            2,
+        )
+        res = voice.process(
+            "Tên bệnh nhân là Nguyễn Văn An, người liên hệ là Trần Thị Bình, mạch 86.",
+            form,
+            mask_fn=pii02_fake,
+        )
+        self.assertEqual(res["extracted"]["ten_benh_nhan"], "[PII]")
+        self.assertEqual(res["extracted"]["nguoi_lien_he"], "[PII]")
+        self.assertEqual(res["extracted"]["mach"], 86)
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

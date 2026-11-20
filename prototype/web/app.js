@@ -402,6 +402,15 @@ async function micStop() {
   renderPanel();
 }
 
+function policyChecksHtml(warnings, alerts) {
+  const ws = warnings || [], as = alerts || [];
+  if (!ws.length && !as.length) return "";
+  return `<div class="policy-checks" style="margin-top:8px">
+    ${as.map((a) => `<div class="reqwarn" role="alert"><b>⚠ Cảnh báo cấp cứu (${esc(a.rule_id)} · ${esc(a.clause)}):</b> ${esc(a.message)} ${a.matched && a.matched.length ? `<span class="mono">(${esc(a.matched.join(", "))})</span>` : ""}</div>`).join("")}
+    ${ws.map((w) => `<div class="reqwarn"><b>Kiểm tra ngưỡng (${esc(w.rule_id)} · ${esc(w.clause)}):</b> ${esc(w.message)} <span class="mono">(${esc(w.field)}=${esc(w.value)})</span></div>`).join("")}
+  </div>`;
+}
+
 function micResultHtml(v) {
   const r = v.r || {};
   if (r.error) return `<div class="vx"><div class="none">Lỗi: ${esc(r.error)}</div><button type="button" class="btn ghost" id="vreset">Thử lại</button></div>`;
@@ -410,13 +419,15 @@ function micResultHtml(v) {
   const fields = (S.detail.forms.find((f) => f.form_id === S.form) || { fields: [] }).fields || [];
   const label = (id) => (fields.find((f) => f.field_id === id) || {}).label || id;
   const ex = Object.entries(r.extracted || {});
+  const piiMeta = r.pii_assessment ? ` · <span class="muted small">${esc(r.pii_assessment.engine)} (${esc(r.pii_assessment.status)}, không gửi ra ngoài)</span>` : "";
   return `<div class="vx"><ul class="steps">
     <li class="done"><span class="st">1</span><span><b>Ghi âm</b>: ${v.secs.toFixed(1)} giây</span></li>
     <li class="done"><span class="st">2</span><span><b>VAD</b> ${ok(r.has_speech)} đoạn có tiếng nói: ${esc(segs)}</span></li>
     <li class="${r.stt_backend && r.stt_backend !== "none" && !(r.stt_error && !r.transcript_len) ? "done" : "err"}"><span class="st">3</span><span><b>STT</b>: ${esc(r.stt_error && !r.transcript_len ? "THẤT BẠI" : (STT_NAME[r.stt_backend] || r.stt_backend))}${r.stt_error ? `<br><span class="muted small">${esc(r.stt_error)}</span>` : ""}</span></li>
-    <li class="done"><span class="st">4</span><span><b>Che PII</b>: ${r.pii_masked ?? 0} chỗ<br><span class="small">${r.masked ? esc(r.masked) : '<span class="muted">(chưa có văn bản)</span>'}</span></span></li>
+    <li class="done"><span class="st">4</span><span><b>Che PII</b>: ${r.pii_masked ?? 0} chỗ${piiMeta}<br><span class="small">${r.masked ? esc(r.masked) : '<span class="muted">(chưa có văn bản)</span>'}</span></span></li>
     <li class="done"><span class="st">5</span><span><b>Trích xuất</b>: ${r.source === "local" ? "Local tại máy (100% offline)" : "—"}${r.out_of_scope ? "<br><span class=\"muted small\">Câu ngoài lề, đã bỏ</span>" : ""}</span></li>
   </ul>
+  ${policyChecksHtml(r.validation_warnings, r.policy_alerts)}
   <div class="sec-h">Điền nháp (${ex.length} ô)</div>
   ${ex.length ? `<div class="lines">${ex.map(([k, val]) => `<div class="ln"><span class="who">${esc(label(k))}</span><span class="tx mono">${esc(val)}</span></div>`).join("")}</div>` : '<div class="none">Không trích xuất được ô nào. Hãy đọc rõ tên chỉ số kèm số, ví dụ "mạch 88, huyết áp 120 trên 80".</div>'}
   <button type="button" class="btn ghost" id="vreset">Ghi lại</button></div>`;
@@ -474,6 +485,7 @@ function renderVoice() {
     b.innerHTML = `<div class="vx"><div class="pills"><span class="pill aip">${v.filled} ô điền nháp</span><span class="pill late">${v.redacted} chỗ đã che định danh</span></div>
       <div class="hint">${v.lines.filter((l) => l.out).length} câu ngoài lề đã bỏ · Câu đọc lại cập nhật giá trị trước đó.</div>
       ${voiceLines(v.lines)}
+      ${policyChecksHtml(v.warnings, v.alerts)}
       <div class="voice-result"><div class="sec-h">Kết quả trích xuất · chưa lưu</div>${Object.entries(v.draft).map(([key, value]) => `<div><span>${esc(form.fields.find((f) => f.field_id === key)?.label || key)}</span><b>${esc(value)}</b></div>`).join("") || '<p class="hint">Chưa nghe được giá trị phù hợp với ô nào.</p>'}</div>
       ${missing.length ? `<div class="reqwarn">Cần bổ sung: ${esc(missing.map((f) => f.label).join(", "))}.</div>` : '<div class="reqok">Đã đủ trường bắt buộc.</div>'}
       <p class="hint">Ô màu tím chứa giá trị từ hội thoại. Kiểm tra và sửa trên phiếu rồi bấm Lưu bản ghi.</p>
@@ -492,7 +504,7 @@ async function voiceRun(sample) {
       if (S.voice !== v || v.st !== "listening") return;
       const r = await api("/api/voice", { text: segment.text, form_id: v.form });
       if (S.voice !== v || v.st !== "listening") return;
-      v.segs.push({ who: segment.who, masked: r.masked, out: r.out_of_scope, pii: r.pii_masked, extracted: r.extracted });
+      v.segs.push({ who: segment.who, masked: r.masked, out: r.out_of_scope, pii: r.pii_masked, extracted: r.extracted, warnings: r.validation_warnings || [], alerts: r.policy_alerts || [] });
       renderPanel();
     }
     await sleep(600);
@@ -512,14 +524,19 @@ async function voiceProcess(v) {
   await sleep(450);
   if (S.voice !== v) return;
   const draft = {};
-  v.segs.filter((l) => !l.out).forEach((l) => Object.assign(draft, l.extracted));
+  const warnings = [], alerts = [];
+  v.segs.filter((l) => !l.out).forEach((l) => {
+    Object.assign(draft, l.extracted);
+    if (l.warnings) warnings.push(...l.warnings);
+    if (l.alerts) alerts.push(...l.alerts);
+  });
   v.steps[1].s = "done"; v.steps[2].s = "run";
   renderPanel();
   await sleep(450);
   if (S.voice !== v || S.pt !== v.patient || S.form !== v.form) return;
   S.draft = { ...S.draft, ...draft };
   Object.keys(draft).forEach((k) => { S.ai[k] = true; });
-  S.voice = { st: "review", segs: [], lines: v.segs, draft, redacted: v.segs.reduce((n, l) => n + l.pii, 0), filled: Object.keys(draft).length };
+  S.voice = { st: "review", segs: [], lines: v.segs, draft, warnings, alerts, redacted: v.segs.reduce((n, l) => n + l.pii, 0), filled: Object.keys(draft).length };
   renderPatient();
   renderPanel();
 }

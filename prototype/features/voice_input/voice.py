@@ -259,15 +259,18 @@ def extract(text, fields):
             if val:
                 val = val[:120]
                 if fid in ("ten_benh_nhan", "nguoi_lien_he"):
-                    if "[tên]" in val.lower():
+                    low_val = val.lower()
+                    if "[tên]" in low_val:
                         val = "[TÊN]"
+                    elif "[pii]" in low_val:
+                        val = "[PII]"
                     else:
                         val = re.split(
                             r"\s+\b(?:mạch|mách|mạnh|nhịp|nhìn|huyết|nhiệt|spo2|số\s+điện|cccd|tư\s+thế|trạng\s+thái)\b",
                             val, maxsplit=1
                         )[0].strip()
                         val = " ".join(val.split()[:4])
-                for tag in ("[tên]", "[sđt]", "[cccd]"):
+                for tag in ("[tên]", "[sđt]", "[cccd]", "[pii]"):
                     if tag in val:
                         val = val.replace(tag, tag.upper())
                 if not val:

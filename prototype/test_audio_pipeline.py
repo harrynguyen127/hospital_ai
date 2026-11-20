@@ -14,17 +14,19 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent
 sys.path.insert(0, str(ROOT))
 
-from features.pii_filter import pii
-from features.voice_input import external_api, stt, voice
+from features.voice_input import stt
+from services import engine
 
 FORM = {
+    "form_id": "phieu_sinh_ton_nguoi_lon",
     "fields": [
+        {"field_id": "ten_benh_nhan", "label": "Tên bệnh nhân", "ui": "text"},
         {"field_id": "mach", "label": "Mạch", "ui": "number"},
         {"field_id": "nhip_tho", "label": "Nhịp thở", "ui": "number"},
         {"field_id": "huyet_ap", "label": "Huyết áp", "ui": "text"},
         {"field_id": "nhiet_do", "label": "Nhiệt độ", "ui": "number"},
         {"field_id": "spo2", "label": "SpO2", "ui": "number"},
-    ]
+    ],
 }
 
 
@@ -62,12 +64,19 @@ def run_pipeline_on_file(audio_path, mock_stt_text=None):
         print("[!] Không nhận diện được chữ nào từ file âm thanh.")
         return
 
-    # 3. Đưa qua pipeline Voice: Lọc PII + Trích xuất Form
-    print(f"\n[3] Tầng Voice Pipeline (Lọc PII + Điền Form):")
-    res = voice.process(transcript, FORM, mask_fn=pii.mask)
+    # 3. Đưa qua pipeline Voice (qua lõi engine nối PII-02 + kiểm tra ngưỡng policy)
+    print(f"\n[3] Tầng Voice Pipeline (Lọc PII-02 Local + Điền Form + Kiểm tra ngưỡng):")
+    res = engine.voice_process(transcript, FORM)
     print(f"    - Văn bản sau lọc PII: \"{res['masked']}\"")
     print(f"    - Số thông tin PII đã che: {res['pii_masked']}")
+    if res.get("pii_assessment"):
+        pa = res["pii_assessment"]
+        print(f"    - Đánh giá PII-02: engine={pa['engine']} | status={pa['status']} | egress={pa['external_egress_authorized']}")
     print(f"    - Câu ngoài lề: {res['out_of_scope']}")
+    if res.get("validation_warnings"):
+        print(f"    - Cảnh báo ngưỡng (Policy): {res['validation_warnings']}")
+    if res.get("policy_alerts"):
+        print(f"    - Cảnh báo cấp cứu (Policy): {res['policy_alerts']}")
     print(f"\n[4] KẾT QUẢ ĐIỀN NHÁP VÀO PHIẾU:")
     print(f"    {res['extracted']}")
     print("=" * 70 + "\n")

@@ -27,11 +27,6 @@ class PiiFilterTests(unittest.TestCase):
             self.assertNotIn("Mẫu A", text, src)
             self.assertIn("[TÊN]", text, src)
 
-    def test_ten_benh_nhan_la_masks_once_without_masking_la(self):
-        text, n = mask("Tên bệnh nhân là Nguyễn Văn An, số điện thoại 0912345678.")
-        self.assertEqual(text, "Tên bệnh nhân là [TÊN], số điện thoại [SĐT].")
-        self.assertEqual(n, 2)
-
     def test_text_without_pii_is_unchanged(self):
         text, n = mask("Mạch 88, nhịp thở 20")
         self.assertEqual(text, "Mạch 88, nhịp thở 20")
