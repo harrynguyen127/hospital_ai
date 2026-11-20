@@ -1,0 +1,183 @@
+[
+  {
+    "rule_id": "POL-REMIND-01",
+    "category": "timing_reminder",
+    "title": "Nhắc lập bệnh án vào viện",
+    "source": {
+      "doc_id": "QD-CHAMSOC-2026",
+      "clause": "Điều 1.1",
+      "evidence": "Bác sĩ phải lập phiếu bệnh án vào viện trong vòng 24 giờ kể từ khi bệnh nhân vào viện."
+    },
+    "form_id": "benh_an_vao_vien",
+    "role": ["bac_si"],
+    "trigger": { "event": "admission" },
+    "schedule": {
+      "type": "once_within",
+      "within": "PT24H"
+    },
+    "required_fields": ["ly_do_vao_vien", "chan_doan"],
+    "status": "active"
+  },
+  {
+    "rule_id": "POL-REMIND-02",
+    "category": "timing_reminder",
+    "title": "Nhắc đo dấu hiệu sinh tồn định kỳ",
+    "source": {
+      "doc_id": "QD-CHAMSOC-2026",
+      "clause": "Điều 3.1",
+      "evidence": "Điều dưỡng phải lập phiếu sinh tồn mỗi 4 giờ một lần, tính từ lần nhập gần nhất."
+    },
+    "form_id": "phieu_sinh_ton_nguoi_lon",
+    "role": ["dieu_duong"],
+    "trigger": { "event": "admission" },
+    "schedule": {
+      "type": "recurring",
+      "every": "PT4H",
+      "anchor": "last_entry"
+    },
+    "required_fields": ["mach", "nhip_tho"],
+    "status": "active"
+  },
+  {
+    "rule_id": "POL-VALID-01",
+    "category": "form_validation",
+    "title": "Ràng buộc kiểm tra tính hợp lý của dấu hiệu sinh tồn",
+    "source": {
+      "doc_id": "QD-CHAMSOC-2026",
+      "clause": "Điều 3.1.b",
+      "evidence": "Các chỉ số sinh tồn phải nằm trong giới hạn sinh lý hợp lý và huyết áp tâm thu phải lớn hơn huyết áp tâm trương."
+    },
+    "form_id": "phieu_sinh_ton_nguoi_lon",
+    "role": ["dieu_duong", "bac_si"],
+    "validation_rules": [
+      {
+        "field": "mach",
+        "type": "range",
+        "min": 30,
+        "max": 220,
+        "error_message": "Chỉ số mạch ngoài khoảng hợp lý (30 - 220 lần/phút)"
+      },
+      {
+        "field": "spo2",
+        "type": "range",
+        "min": 50,
+        "max": 100,
+        "error_message": "Chỉ số SpO2 phải từ 50% đến 100%"
+      },
+      {
+        "type": "expression",
+        "expr": "values.tam_thu > values.tam_truong",
+        "error_message": "Huyết áp tâm thu bắt buộc phải lớn hơn huyết áp tâm trương"
+      }
+    ],
+    "status": "active"
+  },
+  {
+    "rule_id": "POL-VALID-02",
+    "category": "form_validation",
+    "title": "Ràng buộc điều kiện khai báo tiền sử dị ứng",
+    "source": {
+      "doc_id": "QD-CHAMSOC-2026",
+      "clause": "Điều 3.4.a",
+      "evidence": "Khi bệnh nhân có tiền sử dị ứng, bắt buộc phải ghi rõ tên dị nguyên và biểu hiện dị ứng."
+    },
+    "form_id": "phieu_danh_gia_ban_dau",
+    "role": ["dieu_duong"],
+    "conditional_required": {
+      "when": { "field": "co_di_ung", "equals": "Co" },
+      "required_fields": ["ten_di_nguyen", "bieu_hien_di_ung"]
+    },
+    "status": "active"
+  },
+  {
+    "rule_id": "POL-TRIGGER-01",
+    "category": "cross_form_trigger",
+    "title": "Kích hoạt cảnh báo cấp cứu khi sinh tồn suy sụp",
+    "source": {
+      "doc_id": "QD-CAPCUU-2026",
+      "clause": "Điều 4.2",
+      "evidence": "Khi chỉ số SpO2 dưới 90% hoặc Mạch trên 120 lần/phút, phải kích hoạt ngay phiếu xử trí cấp cứu và báo bác sĩ."
+    },
+    "trigger_condition": {
+      "source_form_id": "phieu_sinh_ton_nguoi_lon",
+      "operator": "OR",
+      "conditions": [
+        { "field": "spo2", "op": "<", "value": 90 },
+        { "field": "mach", "op": ">", "value": 120 }
+      ]
+    },
+    "action": {
+      "type": "create_task",
+      "target_form_id": "phieu_xu_tri_cap_cuu",
+      "target_role": ["bac_si", "dieu_duong"],
+      "priority": "urgent",
+      "deadline": "immediate",
+      "alert_level": "RED"
+    },
+    "status": "active"
+  },
+  {
+    "rule_id": "POL-TRIGGER-02",
+    "category": "cross_form_trigger",
+    "title": "Kích hoạt tái đánh giá đau sau dùng thuốc",
+    "source": {
+      "doc_id": "QD-CHAMSOC-2026",
+      "clause": "Điều 4.1",
+      "evidence": "Điều dưỡng phải lập phiếu đánh giá đau sau 30 phút khi dùng thuốc tiêm, truyền giảm đau."
+    },
+    "trigger_condition": {
+      "source_event": "medication_given",
+      "where": {
+        "route": ["tiem", "truyen"],
+        "purpose": "giam_dau"
+      }
+    },
+    "action": {
+      "type": "create_task",
+      "target_form_id": "phieu_danh_gia_dau",
+      "target_role": ["dieu_duong"],
+      "priority": "high",
+      "deadline": "PT30M"
+    },
+    "status": "active"
+  },
+  {
+    "rule_id": "POL-AUTH-01",
+    "category": "role_authorization",
+    "title": "Quy định bác sĩ ký xác nhận phiếu chăm sóc bất thường",
+    "source": {
+      "doc_id": "QD-CHAMSOC-2026",
+      "clause": "Điều 3.2.b",
+      "evidence": "Khi phiếu chăm sóc ghi nhận diễn biến bất thường, bác sĩ điều trị phải ký duyệt xác nhận trong vòng 24 giờ."
+    },
+    "form_id": "phieu_cham_soc",
+    "condition": { "has_abnormal_note": true },
+    "authorization": {
+      "creator_role": "dieu_duong",
+      "required_countersign_role": "bac_si",
+      "deadline": "PT24H"
+    },
+    "status": "active"
+  },
+  {
+    "rule_id": "POL-COMPLIANCE-01",
+    "category": "billing_compliance",
+    "title": "Điều kiện BHYT khi kê đơn kháng sinh dự phòng / kháng sinh hạn chế",
+    "source": {
+      "doc_id": "QD-DUOC-2026",
+      "clause": "Điều 8.1",
+      "evidence": "Kê đơn kháng sinh nhóm ưu tiên quản lý bắt buộc phải có biên bản hội chẩn hoặc kết quả kháng sinh đồ đính kèm."
+    },
+    "check_on_action": "prescribe_restricted_antibiotic",
+    "compliance_requirement": {
+      "required_attached_forms": [
+        "bien_ban_hoi_chan_thuoc_dac_tri",
+        "phieu_ket_qua_khang_sinh_do"
+      ],
+      "operator": "AT_LEAST_ONE",
+      "violation_action": "block_prescription_submission",
+      "warning": "Hồ sơ chưa có biên bản hội chẩn hoặc kháng sinh đồ, BHYT sẽ từ chối thanh toán thuốc này."
+    },
+    "status": "active"
+  }
+]
