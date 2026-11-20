@@ -1,0 +1,8 @@
+# Secret environment files
+.env
+*.env
+.runtime/
+__pycache__/
+*.pyc
+_temp_*
+output/

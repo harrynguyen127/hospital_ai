@@ -5,6 +5,7 @@ window.PROTO_SEED = {
     "title": "Bảng theo dõi dấu hiệu sinh tồn cho người lớn",
     "aliases": ["phiếu sinh tồn", "sinh tồn", "DHST"],
     "fields": [
+      {"field_id": "ten_benh_nhan", "label": "Tên bệnh nhân", "type": "string", "ui": "text", "required": false, "data_level": 1, "group": "Điều kiện đo", "example": "[TÊN]"},
       {"field_id": "thoi_diem_do", "label": "Thời điểm đo", "type": "datetime", "ui": "datetime", "required": false, "data_level": 2, "group": "Điều kiện đo"},
       {"field_id": "tu_the_do", "label": "Tư thế đo", "type": "enum", "ui": "select", "required": false, "data_level": 2, "group": "Điều kiện đo", "options": ["Nằm", "Ngồi", "Đứng"], "example": "Nằm"},
       {"field_id": "ly_do_do", "label": "Lý do đo", "type": "enum", "ui": "select", "required": false, "data_level": 2, "group": "Điều kiện đo", "options": ["Định kỳ", "Sau vận động", "Theo dõi lại"], "example": "Định kỳ"},
@@ -30,6 +31,7 @@ window.PROTO_SEED = {
     "title": "Phiếu chăm sóc điều dưỡng",
     "aliases": ["phiếu chăm sóc", "chăm sóc"],
     "fields": [
+      {"field_id": "ten_benh_nhan", "label": "Tên bệnh nhân", "type": "string", "ui": "text", "required": false, "data_level": 1, "group": "Nhận định đầu ca", "example": "[TÊN]"},
       {"field_id": "gio_nhan_dinh", "label": "Thời điểm nhận định", "type": "datetime", "ui": "datetime", "required": false, "data_level": 2, "group": "Nhận định đầu ca"},
       {"field_id": "than_phien", "label": "Than phiền đầu ca", "type": "string", "ui": "textarea", "required": false, "data_level": 2, "group": "Nhận định đầu ca", "example": "Người bệnh thấy mệt khi tự ngồi dậy."},
       {"field_id": "muc_doc_lap", "label": "Mức hỗ trợ sinh hoạt", "type": "enum", "ui": "select", "required": false, "data_level": 2, "group": "Nhận định đầu ca", "options": ["Hỗ trợ một phần", "Độc lập", "Hỗ trợ hoàn toàn"], "example": "Hỗ trợ một phần"},
@@ -54,6 +56,7 @@ window.PROTO_SEED = {
     "title": "Đánh giá nguy cơ ngã",
     "aliases": ["nguy cơ ngã", "phiếu ngã", "đánh giá ngã"],
     "fields": [
+      {"field_id": "ten_benh_nhan", "label": "Tên bệnh nhân", "type": "string", "ui": "text", "required": false, "data_level": 1, "group": "Bối cảnh đánh giá", "example": "[TÊN]"},
       {"field_id": "luc_danh_gia", "label": "Thời điểm ghi nhận", "type": "datetime", "ui": "datetime", "required": false, "data_level": 2, "group": "Bối cảnh đánh giá"},
       {"field_id": "ly_do_danh_gia", "label": "Lý do đánh giá", "type": "enum", "ui": "select", "required": false, "data_level": 2, "group": "Bối cảnh đánh giá", "options": ["Đầu ca", "Lúc nhập viện", "Sau thay đổi vận động"], "example": "Đầu ca"},
       {"field_id": "nguon_khai", "label": "Nguồn thông tin về lần ngã", "type": "enum", "ui": "select", "required": false, "data_level": 2, "group": "Bối cảnh đánh giá", "options": ["Người bệnh", "Người chăm sóc", "Hồ sơ trong khoa"], "example": "Người bệnh"},
@@ -78,6 +81,7 @@ window.PROTO_SEED = {
     "title": "Đánh giá đau",
     "aliases": ["đánh giá đau", "phiếu đau"],
     "fields": [
+      {"field_id": "ten_benh_nhan", "label": "Tên bệnh nhân", "type": "string", "ui": "text", "required": false, "data_level": 1, "group": "Đánh giá đau", "example": "[TÊN]"},
       {"field_id": "diem_dau", "label": "Điểm đau", "type": "number", "ui": "number", "required": true, "data_level": 2, "group": "Đánh giá đau", "unit": "điểm", "example": 4, "min": 0, "max": 10},
       {"field_id": "thoi_diem_danh_gia", "label": "Thời điểm đánh giá", "type": "datetime", "ui": "datetime", "required": true, "data_level": 2, "group": "Đánh giá đau"},
       {"field_id": "vi_tri_dau", "label": "Vị trí đau", "type": "string", "ui": "text", "required": false, "data_level": 2, "group": "Đánh giá đau", "example": "Vùng quanh vết mổ"},
@@ -102,6 +106,7 @@ window.PROTO_SEED = {
     "title": "Đánh giá ban đầu",
     "aliases": ["đánh giá ban đầu", "đánh giá khi nhập viện"],
     "fields": [
+      {"field_id": "ten_benh_nhan", "label": "Tên bệnh nhân", "type": "string", "ui": "text", "required": false, "data_level": 1, "group": "Thông tin khi tiếp nhận", "example": "[TÊN]"},
       {"field_id": "di_ung", "label": "Dị ứng", "type": "string", "ui": "text", "required": true, "data_level": 2, "group": "Thông tin khi tiếp nhận", "example": "Có nổi mẩn với thuốc mẫu A."},
       {"field_id": "thuoc_dang_dung", "label": "Thuốc đang dùng", "type": "string", "ui": "textarea", "required": false, "data_level": 2, "group": "Thông tin khi tiếp nhận", "example": "Thuốc mẫu B theo hồ sơ mô phỏng."},
       {"field_id": "tien_su", "label": "Tiền sử", "type": "string", "ui": "textarea", "required": false, "data_level": 2, "group": "Thông tin khi tiếp nhận", "example": "Đã từng phẫu thuật bụng."},
@@ -128,6 +133,7 @@ window.PROTO_SEED = {
     "title": "Bệnh án vào viện",
     "aliases": ["bệnh án vào viện", "bệnh án nhập viện"],
     "fields": [
+      {"field_id": "ten_benh_nhan", "label": "Tên bệnh nhân", "type": "string", "ui": "text", "required": false, "data_level": 1, "group": "Tiếp nhận tại khoa", "example": "[TÊN]"},
       {"field_id": "gio_kham", "label": "Thời điểm khám tiếp nhận", "type": "datetime", "ui": "datetime", "required": false, "data_level": 2, "group": "Tiếp nhận tại khoa"},
       {"field_id": "nguoi_cung_cap", "label": "Nguồn cung cấp bệnh sử", "type": "enum", "ui": "select", "required": false, "data_level": 2, "group": "Tiếp nhận tại khoa", "options": ["Người bệnh", "Người chăm sóc", "Hồ sơ chuyển khoa"], "example": "Người bệnh"},
       {"field_id": "cach_vao_khoa", "label": "Cách vào khoa", "type": "enum", "ui": "select", "required": false, "data_level": 2, "group": "Tiếp nhận tại khoa", "options": ["Tự đi", "Xe lăn", "Cáng"], "example": "Tự đi"},
@@ -158,6 +164,7 @@ window.PROTO_SEED = {
     "title": "Tóm tắt bệnh án ra viện",
     "aliases": ["tóm tắt ra viện", "bệnh án ra viện", "ra viện"],
     "fields": [
+      {"field_id": "ten_benh_nhan", "label": "Tên bệnh nhân", "type": "string", "ui": "text", "required": false, "data_level": 1, "group": "Tổng kết đợt điều trị", "example": "[TÊN]"},
       {"field_id": "chan_doan_ra_vien", "label": "Chẩn đoán ra viện", "type": "string", "ui": "textarea", "required": true, "data_level": 2, "group": "Tổng kết đợt điều trị", "example": "Đau bụng đã cải thiện."},
       {"field_id": "qua_trinh", "label": "Quá trình điều trị", "type": "string", "ui": "textarea", "required": false, "data_level": 2, "group": "Tổng kết đợt điều trị", "example": "Đã theo dõi diễn biến và ghi nhận đáp ứng trong hồ sơ mẫu."},
       {"field_id": "tinh_trang_ra_vien", "label": "Tình trạng lúc ra viện", "type": "string", "ui": "textarea", "required": false, "data_level": 2, "group": "Tổng kết đợt điều trị", "example": "Tỉnh, tự đi lại trong phòng."},
@@ -184,6 +191,7 @@ window.PROTO_SEED = {
     "title": "Theo dõi sau mổ",
     "aliases": ["theo dõi sau mổ", "sau mổ"],
     "fields": [
+      {"field_id": "ten_benh_nhan", "label": "Tên bệnh nhân", "type": "string", "ui": "text", "required": false, "data_level": 1, "group": "Bàn giao từ phòng mổ", "example": "[TÊN]"},
       {"field_id": "ten_phau_thuat", "label": "Phẫu thuật theo phiếu bàn giao", "type": "string", "ui": "text", "required": false, "data_level": 2, "group": "Bàn giao từ phòng mổ", "example": "Phẫu thuật bụng mô phỏng"},
       {"field_id": "vo_cam", "label": "Phương pháp vô cảm đã ghi", "type": "enum", "ui": "select", "required": false, "data_level": 2, "group": "Bàn giao từ phòng mổ", "options": ["Gây mê", "Gây tê vùng", "Gây tê tại chỗ"], "example": "Gây mê"},
       {"field_id": "don_vi_gui", "label": "Đơn vị bàn giao", "type": "string", "ui": "text", "required": false, "data_level": 2, "group": "Bàn giao từ phòng mổ", "example": "Buồng hồi tỉnh MẪU-A"},
@@ -209,6 +217,7 @@ window.PROTO_SEED = {
     "title": "Giáo dục sức khỏe",
     "aliases": ["giáo dục sức khỏe"],
     "fields": [
+      {"field_id": "ten_benh_nhan", "label": "Tên bệnh nhân", "type": "string", "ui": "text", "required": false, "data_level": 1, "group": "Chuẩn bị buổi hướng dẫn", "example": "[TÊN]"},
       {"field_id": "thoi_diem_huong_dan", "label": "Thời điểm hướng dẫn", "type": "datetime", "ui": "datetime", "required": false, "data_level": 2, "group": "Chuẩn bị buổi hướng dẫn"},
       {"field_id": "nhu_cau_hoc", "label": "Nhu cầu người nhận nêu ra", "type": "string", "ui": "textarea", "required": false, "data_level": 2, "group": "Chuẩn bị buổi hướng dẫn", "example": "Muốn biết cách gọi hỗ trợ khi cần rời giường."},
       {"field_id": "kien_thuc_ban_dau", "label": "Hiểu biết trước buổi hướng dẫn", "type": "string", "ui": "textarea", "required": false, "data_level": 2, "group": "Chuẩn bị buổi hướng dẫn", "example": "Biết vị trí chuông nhưng chưa từng dùng."},
@@ -232,6 +241,7 @@ window.PROTO_SEED = {
     "title": "Đánh giá nguy cơ loét tì đè",
     "aliases": ["đánh giá loét", "nguy cơ loét", "loét"],
     "fields": [
+      {"field_id": "ten_benh_nhan", "label": "Tên bệnh nhân", "type": "string", "ui": "text", "required": false, "data_level": 1, "group": "Bối cảnh đánh giá", "example": "[TÊN]"},
       {"field_id": "gio_danh_gia_da", "label": "Thời điểm kiểm tra da", "type": "datetime", "ui": "datetime", "required": false, "data_level": 2, "group": "Bối cảnh đánh giá"},
       {"field_id": "ly_do_kiem_tra", "label": "Lý do kiểm tra", "type": "enum", "ui": "select", "required": false, "data_level": 2, "group": "Bối cảnh đánh giá", "options": ["Đầu ca", "Tiếp nhận vào khoa", "Khi thay đổi vận động"], "example": "Đầu ca"},
       {"field_id": "tu_the_quan_sat", "label": "Tư thế lúc quan sát", "type": "enum", "ui": "select", "required": false, "data_level": 2, "group": "Bối cảnh đánh giá", "options": ["Nằm nghiêng có hỗ trợ", "Nằm ngửa", "Ngồi"], "example": "Nằm nghiêng có hỗ trợ"},

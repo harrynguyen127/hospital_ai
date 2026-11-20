@@ -10,12 +10,12 @@ from features.detect_form import form_detection  # noqa: F401  (đăng ký mặc
 from features.pii_filter import pii  # noqa: F401
 from features.policy_rules import policy  # noqa: F401
 from features.voice_input import external_api, voice  # noqa: F401
-from services import reminder, store
+from services import pii_adapter, policy_validation, reminder, store
 
 # ---------------- CONNECTIONS: nối bản thật của từng tính năng tại đây ----------------
-# Ví dụ (khi có bản thật):
-#   from features.pii_filter.ner_pii import mask as ner_mask
-#   registry.connect("pii.mask", ner_mask)
+# Nối bộ lọc PII-02 (rules-based local engine từ feat/pii-text-privacy) qua adapter,
+# giữ nguyên features/pii_filter/pii.py gốc để không vỡ bộ đánh giá pii_runtime.
+registry.connect("pii.mask", pii_adapter.mask)
 # -------------------------------------------------------------------------------------
 
 
@@ -56,4 +56,31 @@ def rollback_policy(st):
 
 
 def voice_process(text, form):
-    return voice.process(text, form, mask_fn=registry.get("pii.mask"))
+    mask_fn = registry.get("pii.mask")
+    assessment = None
+    if mask_fn is pii_adapter.mask:
+        def _tracked_mask(raw):
+            nonlocal assessment
+            res = pii_adapter.mask_with_assessment(raw)
+            assessment = {
+                "engine": res["pii_engine"],
+                "status": res["pii_status"],
+                "external_egress_authorized": res["external_egress_authorized"],
+                "review_decisions": res["review_decisions"],
+            }
+            return res["text"], res["pii_masked"]
+
+        out = voice.process(text, form, mask_fn=_tracked_mask)
+    else:
+        out = voice.process(text, form, mask_fn=mask_fn)
+
+    if assessment is not None:
+        out["pii_assessment"] = assessment
+    checks = (
+        policy_validation.validate_draft(form.get("form_id"), out.get("extracted") or {})
+        if not out.get("out_of_scope")
+        else {"validation_warnings": [], "policy_alerts": []}
+    )
+    out["validation_warnings"] = checks["validation_warnings"]
+    out["policy_alerts"] = checks["policy_alerts"]
+    return out

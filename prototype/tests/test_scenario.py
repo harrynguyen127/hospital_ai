@@ -28,6 +28,7 @@ def _v2_text():
 EMR_SINH_TON = {
     "title": "Bảng theo dõi dấu hiệu sinh tồn cho người lớn",
     "fields": [
+        {"label": "Tên bệnh nhân", "ui": "text"},
         {"label": "Thời điểm đo", "ui": "datetime"},
         {"label": "Tư thế đo", "ui": "select"},
         {"label": "Lý do đo", "ui": "select"},
@@ -162,6 +163,53 @@ class ScenarioTests(unittest.TestCase):
         self.assertEqual(res["extracted"], {"mach": 88, "nhip_tho": 20, "huyet_ap": "120/80",
                                             "nhiet_do": 37.2, "spo2": 98})
 
+    def test_all_10_forms_local_test_scenarios_pass_continuously_and_segmented(self):
+        """Toàn bộ 10 kịch bản test trên 10 form trích xuất đúng 100% ở cả 2 chế độ (nói liên tục & kịch bản mẫu)."""
+        import json, re
+        forms = store.read()["forms"]
+        scenarios_file = ROOT.parent / "docs" / "VOICE_LOCAL_TEST_SCENARIOS.md"
+        doc = scenarios_file.read_text(encoding="utf-8")
+        scenarios = re.findall(
+            r"## Kịch bản (\d+):[^(]+\((`[^`]+`)\).*?### Kịch bản thoại đầu vào \(Input\)(.*?)### Synthetic Output(.*?)```json\s*(.*?)\s*```",
+            doc,
+            re.DOTALL,
+        )
+        self.assertEqual(len(scenarios), 10)
+
+        for num, fid_code, input_block, _, synth_json in scenarios:
+            fid = fid_code.strip("`")
+            form = forms[fid]
+            expected = json.loads(synth_json)["extracted"]
+
+            lines = [m.group(1) for m in re.finditer(r'> \d+\.\s*"([^"]+)"', input_block)]
+            full_text = " ".join(lines)
+            raw_cont = re.sub(r"[,.:;!?]+", " ", full_text).lower()
+            raw_cont = re.sub(r"\s+", " ", raw_cont).strip()
+
+            # Chế độ nói liên tục không dấu câu (PhoWhisper thực tế)
+            res_cont = engine.voice_process(raw_cont, form)
+            ext_cont = res_cont["extracted"]
+
+            # Chế độ từng câu (Kịch bản mẫu trên Web)
+            ext_seg = {}
+            for line in lines:
+                r = engine.voice_process(line, form)
+                ext_seg.update(r["extracted"])
+
+            for k, exp_val in expected.items():
+                self.assertIn(k, ext_cont, f"Kịch bản {num} ({fid}) thiếu trường {k} ở chế độ nói liên tục")
+                self.assertIn(k, ext_seg, f"Kịch bản {num} ({fid}) thiếu trường {k} ở chế độ kịch bản mẫu")
+                self.assertEqual(
+                    str(ext_cont[k]).strip().lower(),
+                    str(exp_val).strip().lower(),
+                    f"Kịch bản {num} ({fid}) sai giá trị trường {k} ở chế độ nói liên tục: expected='{exp_val}' got='{ext_cont[k]}'"
+                )
+                self.assertEqual(
+                    str(ext_seg[k]).strip().lower(),
+                    str(exp_val).strip().lower(),
+                    f"Kịch bản {num} ({fid}) sai giá trị trường {k} ở chế độ kịch bản mẫu: expected='{exp_val}' got='{ext_seg[k]}'"
+                )
+
     # --- Gửi API ngoài: chỉ nhận bản đã lọc PII ---
     def test_external_api_refuses_unfiltered_text(self):
         with self.assertRaises(ValueError):
@@ -175,6 +223,63 @@ class ScenarioTests(unittest.TestCase):
         self.assertNotIn("Mẫu A", payload["text"])
         self.assertEqual(payload["pii_masked"], 2)
         self.assertEqual(send_filtered(payload), {"sent": False, "reason": "prototype: API ngoài chưa được bật"})
+
+    # --- Tích hợp PII-02 & Policy multi-category ---
+    def test_pii02_adapter_connected_and_legacy_baseline_unchanged(self):
+        from contracts import registry
+        from services import pii_adapter
+
+        # Baseline pii.py giữ nguyên 3 pattern gốc để không vỡ pii_runtime/tests/test_evaluate_rules.py
+        self.assertEqual(len(pii.PII), 3)
+        self.assertIs(registry.get("pii.mask"), pii_adapter.mask)
+
+        form = store.read()["forms"]["phieu_sinh_ton_nguoi_lon"]
+        res = engine.voice_process(
+            "Bệnh nhân Nguyễn Văn An, email an.nguyen@example.vn, mã bệnh nhân BN-2026-009, "
+            "số điện thoại không chín một hai ba bốn năm sáu bảy tám. Mạch 88, SpO2 98.",
+            form,
+        )
+        self.assertNotIn("Nguyễn Văn An", res["masked"])
+        self.assertNotIn("an.nguyen@example.vn", res["masked"])
+        self.assertNotIn("BN-2026-009", res["masked"])
+        self.assertNotIn("không chín một hai", res["masked"])
+        self.assertIn("[TÊN]", res["masked"])
+        self.assertIn("[SĐT]", res["masked"])
+        self.assertIn("[PII]", res["masked"])
+        self.assertEqual(res["pii_assessment"]["engine"], "pii-02-rules-review")
+        self.assertEqual(res["pii_assessment"]["status"], "review_required")
+        self.assertFalse(res["pii_assessment"]["external_egress_authorized"])
+        self.assertEqual(res["extracted"]["mach"], 88)
+        self.assertEqual(res["extracted"]["spo2"], 98)
+
+    def test_pii02_adapter_preserves_clinical_terms_and_vietnamese_names(self):
+        form = store.read()["forms"]["phieu_cham_soc"]
+        res_clin = engine.voice_process("Bệnh nhân SpO2 98%, Đau bụng nhẹ.", form)
+        self.assertIn("SpO2 98%", res_clin["masked"])
+        self.assertIn("Đau bụng", res_clin["masked"])
+
+        res_name = engine.voice_process("tên bệnh nhân là lý phương bảo ca trực là ca sáng", form)
+        self.assertIn("[TÊN]", res_name["masked"])
+        self.assertNotIn("lý phương bảo", res_name["masked"].lower())
+        self.assertEqual(res_name["extracted"]["ten_benh_nhan"], "[TÊN]")
+        self.assertEqual(res_name["extracted"]["ca_truc"], "Ca sáng")
+
+    def test_policy_multi_category_validation_and_emergency_trigger_on_voice_draft(self):
+        form = store.read()["forms"]["phieu_sinh_ton_nguoi_lon"]
+        normal = engine.voice_process("Mạch 88, nhịp thở 20, huyết áp 120 trên 80, SpO2 98.", form)
+        self.assertEqual(normal["validation_warnings"], [])
+        self.assertEqual(normal["policy_alerts"], [])
+
+        invalid = engine.voice_process("Mạch 250, huyết áp 80 trên 120, SpO2 45.", form)
+        warn_fields = {w["field"] for w in invalid["validation_warnings"]}
+        self.assertEqual(warn_fields, {"mach", "spo2", "huyet_ap"})
+        self.assertTrue(any(a["rule_id"] == "POL-TRIGGER-01" for a in invalid["policy_alerts"]))
+
+        urgent = engine.voice_process("Mạch 132, huyết áp 110 trên 70, SpO2 87.", form)
+        self.assertEqual(urgent["validation_warnings"], [])
+        self.assertEqual(len(urgent["policy_alerts"]), 1)
+        self.assertEqual(urgent["policy_alerts"][0]["rule_id"], "POL-TRIGGER-01")
+        self.assertEqual(urgent["policy_alerts"][0]["alert_level"], "RED")
 
 
 if __name__ == "__main__":

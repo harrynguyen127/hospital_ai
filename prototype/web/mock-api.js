@@ -657,29 +657,98 @@
       [["policy.rollback", `hoàn tác ${cur.version} về ${prev.version}`]]);
   }
 
-  // ---------- PII và giọng nói (features/pii_filter, features/voice_input) ----------
+  // ---------- PII và giọng nói (đồng bộ services/pii_adapter, features/voice_input, services/policy_validation) ----------
   const PII_PHONE = /\b0\d{9,10}\b/g;
   const PII_CCCD = /\b\d{12}\b/g;
-  const PII_NAME = /(tên là|liên hệ là|Anh|Chị|Ông|Bà|anh|chị|ông|bà|bệnh nhân|Bệnh nhân)\s+((?:[A-ZÀ-Ỵ][\p{L}\p{N}_]*\s?){1,4})/gu;
+  const PII_EMAIL = /(?<![\w@.+-])[\w.+-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}(?![\w@-])/g;
+  const PII_NAME = /(?<![\p{L}\p{N}_])([Tt]ên bệnh nhân là|[Tt]ên bệnh nhân|[Bb]ệnh nhân tên là|[Bb]ệnh nhân là|[Tt]ên là|[Nn]gười liên hệ là|[Ll]iên hệ là|Anh|Chị|Ông|Bà|anh|chị|ông|bà|[Bb]ệnh nhân)\s+((?:[A-ZÀ-Ỵ][\p{L}\p{N}_]*\s?){1,4})/gu;
+  const PII_CLINICAL_GUARD = new Set(["spo2", "hba1c", "gcs", "bmi", "đau", "sốt", "mạch", "huyết", "nhiệt", "nhịp", "không", "có"]);
 
   function maskPii(text) {
     let count = 0;
     text = text.replace(PII_PHONE, () => { count++; return "[SĐT]"; });
     text = text.replace(PII_CCCD, () => { count++; return "[CCCD]"; });
-    text = text.replace(PII_NAME, (m, g1, g2) => { count++; return m.split(g2).join("[TÊN]"); });
+    text = text.replace(PII_EMAIL, () => { count++; return "[PII]"; });
+    text = text.replace(PII_NAME, (m, g1, g2) => {
+      const target = g2.trim();
+      if (!target || target.startsWith("[") || PII_CLINICAL_GUARD.has(norm(target.split(/\s+/)[0]))) return m;
+      count++;
+      const idx = m.lastIndexOf(target);
+      return idx >= 0 ? m.slice(0, idx) + "[TÊN]" + m.slice(idx + target.length) : m;
+    });
     return [text, count];
   }
 
   const OUT_OF_SCOPE = ["trời đẹp", "thời tiết", "cuối tuần", "ăn trưa", "bóng đá", "phim"];
-  const SYNONYMS = { "thuốc đang dùng": ["đang dùng"], "người liên hệ": ["người nhà", "liên hệ"], "nhiệt độ": ["sốt"] };
+  const SYNONYMS = {
+    "tên bệnh nhân": ["họ tên bệnh nhân", "bệnh nhân tên là", "bệnh nhân là", "tên người bệnh"],
+    "mạch": ["nhịp tim"], "nhịp thở": ["tần số thở"], "huyết áp": ["ha"],
+    "nhiệt độ": ["thân nhiệt", "sốt"], "spo2": ["oxy máu", "bão hòa oxy"],
+    "nội dung chăm sóc": ["chăm sóc", "thực hiện chăm sóc"],
+    "người thực hiện": ["điều dưỡng thực hiện", "người làm"],
+    "điểm nguy cơ ngã": ["điểm ngã", "nguy cơ ngã"], "kết quả": ["kết quả đánh giá", "kết luận"],
+    "điểm đau": ["mức độ đau", "thang điểm đau"], "thời điểm đánh giá": ["thời gian đánh giá", "lúc đánh giá", "thời điểm"],
+    "dị ứng": ["tiền sử dị ứng", "bệnh nhân dị ứng"], "thuốc đang dùng": ["đang dùng", "thuốc hiện tại"],
+    "người liên hệ": ["người nhà", "liên hệ"], "tiền sử": ["tiền sử bệnh", "bệnh nền"],
+    "lý do vào viện": ["vào viện vì", "lý do nhập viện", "lý do"],
+    "chẩn đoán": ["chẩn đoán vào viện", "chẩn đoán sơ bộ", "chẩn đoán là"],
+    "chẩn đoán ra viện": ["chẩn đoán khi ra viện"], "hướng điều trị": ["kế hoạch điều trị", "điều trị tiếp"],
+    "dấu hiệu theo dõi": ["theo dõi sau mổ", "dấu hiệu"],
+    "nội dung giáo dục": ["tư vấn giáo dục", "hướng dẫn bệnh nhân"], "người nhận giáo dục": ["người nhận"],
+    "điểm braden": ["braden", "điểm loét"], "nguồn cung cấp bệnh sử": ["cung cấp bệnh sử", "nguồn cung cấp"],
+    "nguồn tiếp nhận": ["tiếp nhận", "nơi tiếp nhận"],
+  };
 
   function speech(text) {
     return norm(text).replace(/(\d+)\s*phẩy\s*(\d+)/g, "$1.$2");
   }
 
+  function validateDraftMock(formId, extracted) {
+    const warnings = [], alerts = [];
+    if (formId !== "phieu_sinh_ton_nguoi_lon" || !extracted) return { validation_warnings: warnings, policy_alerts: alerts };
+    if (typeof extracted.mach === "number" && (extracted.mach < 30 || extracted.mach > 220)) {
+      warnings.push({ rule_id: "POL-VALID-01", clause: "Điều 3.1.b", field: "mach", value: extracted.mach, message: "Chỉ số mạch ngoài khoảng hợp lý (30 - 220 lần/phút)" });
+    }
+    if (typeof extracted.spo2 === "number" && (extracted.spo2 < 50 || extracted.spo2 > 100)) {
+      warnings.push({ rule_id: "POL-VALID-01", clause: "Điều 3.1.b", field: "spo2", value: extracted.spo2, message: "Chỉ số SpO2 phải từ 50% đến 100%" });
+    }
+    if (typeof extracted.huyet_ap === "string") {
+      const m = /^\s*(\d{2,3})\s*\/\s*(\d{2,3})/.exec(extracted.huyet_ap);
+      if (m && Number(m[1]) <= Number(m[2])) {
+        warnings.push({ rule_id: "POL-VALID-01", clause: "Điều 3.1.b", field: "huyet_ap", value: extracted.huyet_ap, message: "Huyết áp tâm thu bắt buộc phải lớn hơn huyết áp tâm trương" });
+      }
+    }
+    const matched = [];
+    if (typeof extracted.spo2 === "number" && extracted.spo2 < 90) matched.push(`spo2=${extracted.spo2}`);
+    if (typeof extracted.mach === "number" && extracted.mach > 120) matched.push(`mach=${extracted.mach}`);
+    if (matched.length) {
+      alerts.push({ rule_id: "POL-TRIGGER-01", clause: "Điều 4.2", alert_level: "RED", matched, message: "Khi chỉ số SpO2 dưới 90% hoặc Mạch trên 120 lần/phút, phải kích hoạt ngay phiếu xử trí cấp cứu và báo bác sĩ." });
+    }
+    return { validation_warnings: warnings, policy_alerts: alerts };
+  }
+
   function extract(text, fields) {
     const t = speech(text);
     const res = {};
+    const cands = [];
+    for (const f of fields) {
+      const label = norm(f.label);
+      const base = label.replace(/\s*\([^)]*\)/g, "").trim();
+      const kws = [label, ...(base && base !== label ? [base] : []), ...(SYNONYMS[label] || []), ...(SYNONYMS[base] || [])];
+      for (const kw of new Set(kws)) cands.push([kw, f.field_id]);
+    }
+    cands.sort((a, b) => b[0].length - a[0].length);
+    const spans = [], occ = [];
+    for (const [kw, fid] of cands) {
+      if (spans.some((x) => x[2] === fid)) continue;
+      const idx = t.indexOf(kw);
+      if (idx < 0) continue;
+      const s = idx, e = idx + kw.length;
+      if (occ.some(([bs, be]) => bs <= s && e <= be)) continue;
+      spans.push([s, e, fid]); occ.push([s, e]);
+    }
+    spans.sort((a, b) => a[0] - b[0]);
+
     for (const f of fields) {
       const label = norm(f.label);
       if (label === "huyết áp") {
@@ -687,20 +756,29 @@
         if (m) res[f.field_id] = `${m[1]}/${m[2]}`;
         continue;
       }
-      for (const kw of [label, ...(SYNONYMS[label] || [])]) {
-        const idx = t.indexOf(kw);
-        if (idx < 0) continue;
-        const rest = t.slice(idx + kw.length);
-        if (f.ui === "number") {
-          const m = /^[^\d]{0,12}(\d+(?:\.\d+)?)/.exec(rest);
-          if (m) { res[f.field_id] = Number(m[1]); break; }
-        } else if (["text", "textarea", "select"].includes(f.ui)) {
-          const m = /^\s*(?:là|:)?\s*([^.;,]+)/.exec(rest);
-          if (m && m[1].trim()) {
-            const textValue = m[1].trim().slice(0, 120);
-            const value = f.ui === "select" ? f.options.find((o) => norm(o) === textValue) : textValue;
-            if (value !== undefined) { res[f.field_id] = value; break; }
+      const sp = spans.find((x) => x[2] === f.field_id);
+      if (!sp) continue;
+      const nextBound = spans.filter((x) => x[2] !== f.field_id && x[0] >= sp[1]).reduce((mn, x) => Math.min(mn, x[0]), t.length);
+      const rest = t.slice(sp[1], nextBound);
+      if (f.ui === "number") {
+        const m = /^[^\d]{0,12}(\d+(?:\.\d+)?)/.exec(rest);
+        if (m) res[f.field_id] = Number(m[1]);
+      } else if (f.ui === "datetime") {
+        const dm = /(\d{4}-\d{2}-\d{2})[t\s]+(\d{1,2})(?::|\s*giờ\s*|\s+)(\d{2})/.exec(rest);
+        if (dm) res[f.field_id] = `${dm[1]}T${String(dm[2]).padStart(2, "0")}:${dm[3]}`;
+      } else if (f.ui === "checkbox") {
+        const cm = /^\s*(?:là|:)?\s*(có|không|đúng|sai|true|false)\b/.exec(rest);
+        if (cm) res[f.field_id] = ["có", "đúng", "true"].includes(cm[1]);
+      } else if (["text", "textarea", "select"].includes(f.ui)) {
+        const m = /^\s*(?:là|:)?\s*([^.;,]+)/.exec(rest);
+        if (m && m[1].trim()) {
+          let textValue = m[1].trim().slice(0, 120);
+          for (const tag of ["[tên]", "[sđt]", "[cccd]", "[pii]"]) {
+            if (textValue.includes(tag)) textValue = textValue.replaceAll(tag, tag.toUpperCase());
           }
+          if ((f.field_id === "ten_benh_nhan" || f.field_id === "nguoi_lien_he") && textValue.includes("[TÊN]")) textValue = "[TÊN]";
+          const value = f.ui === "select" ? (f.options || []).find((o) => norm(o) === norm(textValue)) : textValue;
+          if (value !== undefined) res[f.field_id] = value;
         }
       }
     }
@@ -711,9 +789,11 @@
     const [masked, pii] = maskPii(text);
     const low = norm(text);
     if (OUT_OF_SCOPE.some((k) => low.includes(k))) {
-      return { masked, pii_masked: pii, out_of_scope: true, extracted: {} };
+      return { masked, pii_masked: pii, out_of_scope: true, extracted: {}, validation_warnings: [], policy_alerts: [] };
     }
-    return { masked, pii_masked: pii, out_of_scope: false, extracted: extract(masked, form.fields) };
+    const extracted = extract(masked, form.fields);
+    const checks = validateDraftMock(form.form_id, extracted);
+    return { masked, pii_masked: pii, out_of_scope: false, extracted, ...checks };
   }
 
   // ---------- endpoint GET ----------

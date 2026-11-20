@@ -17,6 +17,7 @@ from shared.common import fingerprint  # noqa: E402
 EMR_SINH_TON = {
     "title": "Bảng theo dõi dấu hiệu sinh tồn cho người lớn",
     "fields": [
+        {"label": "Tên bệnh nhân", "ui": "text"},
         {"label": "Thời điểm đo", "ui": "datetime"},
         {"label": "Tư thế đo", "ui": "select"},
         {"label": "Lý do đo", "ui": "select"},

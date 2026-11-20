@@ -22,6 +22,28 @@ REG_DIR = store.DATA_DIR / "regulations"
 DOC_ID = "QD-CHAMSOC-2026"
 
 
+def load_dotenv():
+    """Tự động nạp biến môi trường từ .env nếu có (chỉ dùng stdlib)."""
+    for p in (ROOT / ".env", ROOT.parent / ".env"):
+        if p.is_file():
+            for line in p.read_text(encoding="utf-8").splitlines():
+                line = line.strip()
+                if line and not line.startswith("#") and "=" in line:
+                    k, v = line.split("=", 1)
+                    k, v = k.strip(), v.strip().strip("\"'")
+                    if k and k not in os.environ:
+                        os.environ[k] = v
+            break
+
+
+load_dotenv()
+
+# --- [TẠM TẮT - CHƯA SỬ DỤNG] Nối LLM API thật cho slot voice.send khi có VOICE_API_KEY ---
+# if os.environ.get("VOICE_API_KEY", "").strip():
+#     from features.voice_input import external_api as _voice_api  # noqa: E402
+#     registry.connect("voice.send", _voice_api.llm_sender)
+
+
 def ensure_seeded():
     with store.transaction() as st:
         if not st["rulesets"]:
@@ -208,7 +230,46 @@ def p_voice(body):
     form = st["forms"].get(body.get("form_id"))
     if not form:
         raise ValueError("không tìm thấy form")
-    return {"ok": True, **engine.voice_process(body.get("text", ""), form)}
+    res = engine.voice_process(body.get("text", ""), form)
+    print(f"[VOICE] form={body.get('form_id')} | pii={res['pii_masked']} | out_of_scope={res['out_of_scope']} | extracted={res['extracted']}", flush=True)
+    return {"ok": True, **res}
+
+
+def p_voice_audio(body):
+    """Thử micro: nhận WAV (base64) -> VAD -> STT -> che PII -> trích xuất. Trả đủ thông tin từng bước."""
+    import base64
+    import tempfile
+    import time
+    from features.voice_input import stt
+    t0 = time.perf_counter()
+    st = store.read()
+    fid = body.get("form_id")
+    form = st["forms"].get(fid)
+    if not form:
+        raise ValueError("không tìm thấy form")
+    raw = base64.b64decode(body.get("audio_b64") or "")
+    if len(raw) < 100:
+        raise ValueError("không nhận được dữ liệu âm thanh")
+    est_sec = max(0.0, (len(raw) - 44) / 32000.0)
+    print(f"\n[AUDIO] Nhận WAV ~{est_sec:.1f}s ({len(raw):,} bytes) cho form={fid}", flush=True)
+    with tempfile.TemporaryDirectory() as tmp:
+        path = Path(tmp) / "mic.wav"
+        path.write_bytes(raw)
+        info = stt.transcribe_with_info(path)
+    print(f"[AUDIO] VAD segments={info['segments']} | STT backend={info['backend']} | time={time.perf_counter()-t0:.2f}s", flush=True)
+    if info["error"]:
+        print(f"[AUDIO] STT ERROR: {info['error']}", flush=True)
+    res = {"ok": True, "segments": info["segments"], "stt_backend": info["backend"],
+           "stt_error": info["error"], "has_speech": bool(info["segments"]), "transcript_len": len(info["text"])}
+    if info["text"]:
+        print(f"[AUDIO] Transcript ({len(info['text'])} ký tự): {info['text']}", flush=True)
+        vout = engine.voice_process(info["text"], form)
+        res.update(vout)
+        print(f"[AUDIO] PII masked={vout['pii_masked']} | masked={vout['masked']}", flush=True)
+        print(f"[AUDIO] Extracted ({len(vout['extracted'])} ô): {vout['extracted']}", flush=True)
+    res["mode"] = "local"
+    # res["send_mode"] = registry.status().get("voice.send")
+    return res
 
 
 def p_clock(body):
@@ -231,7 +292,8 @@ def p_reset(body):
 
 POST_ROUTES = {
     "/api/detect": p_detect, "/api/forms/rollback": p_form_rollback, "/api/records": p_records,
-    "/api/policy/ingest": p_ingest, "/api/policy/rollback": p_rollback, "/api/voice": p_voice,
+    "/api/policy/ingest": p_ingest, "/api/policy/rollback": p_rollback,
+    "/api/voice": p_voice, "/api/voice/audio": p_voice_audio,
     "/api/clock": p_clock, "/api/reset": p_reset,
 }
 
@@ -240,8 +302,9 @@ CTYPES = {".html": "text/html; charset=utf-8", ".js": "application/javascript; c
 
 
 class Handler(BaseHTTPRequestHandler):
-    def log_message(self, fmt, *args):  # giữ console gọn
-        pass
+    def log_message(self, fmt, *args):
+        ts = dt.datetime.now().strftime("%H:%M:%S")
+        print(f"[{ts}] {fmt % args}", flush=True)
 
     def _send(self, code, body, ctype):
         self.send_response(code)
@@ -293,8 +356,8 @@ def main():
     ensure_seeded()
     port = int(os.environ.get("PORT", "8765"))
     srv = ThreadingHTTPServer(("127.0.0.1", port), Handler)
-    print(f"Các điểm nối: {registry.status()}")
-    print(f"Prototype chạy tại http://127.0.0.1:{port}  (Ctrl+C để dừng)")
+    print(f"Các điểm nối: {registry.status()}", flush=True)
+    print(f"Prototype chạy tại http://127.0.0.1:{port}  (Ctrl+C để dừng)", flush=True)
     srv.serve_forever()
 
 

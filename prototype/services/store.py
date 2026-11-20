@@ -18,7 +18,7 @@ DATA_DIR = ROOT / "data"
 RUNTIME_DIR = Path(os.environ.get("PROTO_RUNTIME_DIR", ROOT / ".runtime"))
 STATE_FILE = RUNTIME_DIR / "state.json"
 DEFAULT_NOW = "2026-11-16T10:00:00+07:00"
-FORM_SEED_VERSION = 3
+FORM_SEED_VERSION = 5
 
 _lock = threading.RLock()
 _cache = None

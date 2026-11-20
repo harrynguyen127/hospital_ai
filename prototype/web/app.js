@@ -325,20 +325,142 @@ function voiceLines(lines) {
   return `<div class="lines">${lines.map((l) => `<div class="ln ${l.out ? "pii" : ""}"><span class="who">${esc(l.who)}</span><span class="tx">${l.out ? '<span class="drop">Câu ngoài lề, đã bỏ</span>' : esc(l.masked)}${l.pii ? ' <span class="tag pii">Đã che định danh</span>' : ""}</span></div>`).join("")}</div>`;
 }
 
+// ===== Thử micro thật: ghi âm -> WAV 16kHz -> /api/voice/audio, hiển thị từng bước để quan sát =====
+const MIC = { stream: null, ctx: null, node: null, chunks: [], t0: 0, timer: null };
+// STT_NAME: tạm tắt Cloud STT Blaze.vn, chỉ chạy local PhoWhisper
+const STT_NAME = {
+  // blaze: "Blaze.vn Cloud STT",
+  phowhisper: "PhoWhisper-small (local)",
+  none: "— (VAD chặn, không gọi STT)",
+};
+
+async function micStart() {
+  if (USE_MOCK) { toast("Thử micro cần chạy qua server (python server.py), không dùng file://"); return; }
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { toast("Trình duyệt không hỗ trợ micro (cần http://127.0.0.1)"); return; }
+  try {
+    MIC.stream = await navigator.mediaDevices.getUserMedia({ audio: { channelCount: 1, echoCancellation: true } });
+  } catch (e) { toast("Không mở được micro: " + e.message); return; }
+  MIC.ctx = new (window.AudioContext || window.webkitAudioContext)();
+  const src = MIC.ctx.createMediaStreamSource(MIC.stream);
+  MIC.node = MIC.ctx.createScriptProcessor(4096, 1, 1);
+  MIC.chunks = [];
+  MIC.node.onaudioprocess = (e) => {
+    const d = new Float32Array(e.inputBuffer.getChannelData(0));
+    MIC.chunks.push(d);
+    let s = 0; for (let i = 0; i < d.length; i++) s += d[i] * d[i];
+    const lv = $("miclvl");
+    if (lv) lv.style.width = Math.min(100, Math.sqrt(s / d.length) * 400) + "%";
+  };
+  src.connect(MIC.node); MIC.node.connect(MIC.ctx.destination);
+  MIC.t0 = Date.now();
+  S.voice = { st: "mic_rec", segs: [] };
+  renderPanel();
+  MIC.timer = setInterval(() => {
+    const secs = (Date.now() - MIC.t0) / 1000;
+    const t = $("mictime");
+    if (t) t.textContent = secs.toFixed(1) + " / 60 giây";
+    if (secs >= 60) micStop();
+  }, 200);
+}
+
+function encodeWav16k(chunks, srcRate) {
+  let len = 0; chunks.forEach((c) => (len += c.length));
+  const all = new Float32Array(len); let o = 0; chunks.forEach((c) => { all.set(c, o); o += c.length; });
+  const ratio = srcRate / 16000, n = Math.floor(all.length / ratio);
+  const pcm = new Int16Array(n);
+  for (let i = 0; i < n; i++) {
+    const x = i * ratio, i0 = Math.floor(x), i1 = Math.min(i0 + 1, all.length - 1), f = x - i0;
+    const v = Math.max(-1, Math.min(1, all[i0] * (1 - f) + all[i1] * f));
+    pcm[i] = v < 0 ? v * 0x8000 : v * 0x7fff;
+  }
+  const buf = new ArrayBuffer(44 + pcm.length * 2), dv = new DataView(buf);
+  const w = (p, s) => { for (let i = 0; i < s.length; i++) dv.setUint8(p + i, s.charCodeAt(i)); };
+  w(0, "RIFF"); dv.setUint32(4, 36 + pcm.length * 2, true); w(8, "WAVEfmt "); dv.setUint32(16, 16, true);
+  dv.setUint16(20, 1, true); dv.setUint16(22, 1, true); dv.setUint32(24, 16000, true); dv.setUint32(28, 32000, true);
+  dv.setUint16(32, 2, true); dv.setUint16(34, 16, true); w(36, "data"); dv.setUint32(40, pcm.length * 2, true);
+  new Int16Array(buf, 44).set(pcm);
+  return new Uint8Array(buf);
+}
+function toB64(bytes) { let s = ""; for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000)); return btoa(s); }
+
+async function micStop() {
+  clearInterval(MIC.timer);
+  const rate = MIC.ctx.sampleRate, secs = (Date.now() - MIC.t0) / 1000;
+  MIC.node.disconnect(); MIC.stream.getTracks().forEach((t) => t.stop()); MIC.ctx.close();
+  S.voice = { st: "mic_proc", segs: [] };
+  renderPanel();
+  try {
+    const wav = encodeWav16k(MIC.chunks, rate);
+    const r = await api("/api/voice/audio", { form_id: S.form, audio_b64: toB64(wav) });
+    S.voice = { st: "mic_res", r, secs, segs: [] };
+    if (r.extracted && Object.keys(r.extracted).length) {
+      S.draft = { ...S.draft, ...r.extracted };
+      Object.keys(r.extracted).forEach((k) => { S.ai[k] = true; });
+      renderPatient();
+    }
+  } catch (e) { S.voice = { st: "mic_res", r: { error: e.message }, secs, segs: [] }; }
+  renderPanel();
+}
+
+function policyChecksHtml(warnings, alerts) {
+  const ws = warnings || [], as = alerts || [];
+  if (!ws.length && !as.length) return "";
+  return `<div class="policy-checks" style="margin-top:8px">
+    ${as.map((a) => `<div class="reqwarn" role="alert"><b>⚠ Cảnh báo cấp cứu (${esc(a.rule_id)} · ${esc(a.clause)}):</b> ${esc(a.message)} ${a.matched && a.matched.length ? `<span class="mono">(${esc(a.matched.join(", "))})</span>` : ""}</div>`).join("")}
+    ${ws.map((w) => `<div class="reqwarn"><b>Kiểm tra ngưỡng (${esc(w.rule_id)} · ${esc(w.clause)}):</b> ${esc(w.message)} <span class="mono">(${esc(w.field)}=${esc(w.value)})</span></div>`).join("")}
+  </div>`;
+}
+
+function micResultHtml(v) {
+  const r = v.r || {};
+  if (r.error) return `<div class="vx"><div class="none">Lỗi: ${esc(r.error)}</div><button type="button" class="btn ghost" id="vreset">Thử lại</button></div>`;
+  const ok = (b) => `<span class="pill ${b ? "okp" : "late"}">${b ? "✓" : "✗"}</span>`;
+  const segs = (r.segments || []).map((s) => s[0] + "–" + s[1] + "s").join(", ") || "không có";
+  const fields = (S.detail.forms.find((f) => f.form_id === S.form) || { fields: [] }).fields || [];
+  const label = (id) => (fields.find((f) => f.field_id === id) || {}).label || id;
+  const ex = Object.entries(r.extracted || {});
+  const piiMeta = r.pii_assessment ? ` · <span class="muted small">${esc(r.pii_assessment.engine)} (${esc(r.pii_assessment.status)}, không gửi ra ngoài)</span>` : "";
+  return `<div class="vx"><ul class="steps">
+    <li class="done"><span class="st">1</span><span><b>Ghi âm</b>: ${v.secs.toFixed(1)} giây</span></li>
+    <li class="done"><span class="st">2</span><span><b>VAD</b> ${ok(r.has_speech)} đoạn có tiếng nói: ${esc(segs)}</span></li>
+    <li class="${r.stt_backend && r.stt_backend !== "none" && !(r.stt_error && !r.transcript_len) ? "done" : "err"}"><span class="st">3</span><span><b>STT</b>: ${esc(r.stt_error && !r.transcript_len ? "THẤT BẠI" : (STT_NAME[r.stt_backend] || r.stt_backend))}${r.stt_error ? `<br><span class="muted small">${esc(r.stt_error)}</span>` : ""}</span></li>
+    <li class="done"><span class="st">4</span><span><b>Che PII</b>: ${r.pii_masked ?? 0} chỗ${piiMeta}<br><span class="small">${r.masked ? esc(r.masked) : '<span class="muted">(chưa có văn bản)</span>'}</span></span></li>
+    <li class="done"><span class="st">5</span><span><b>Trích xuất</b>: ${r.source === "local" ? "Local tại máy (100% offline)" : "—"}${r.out_of_scope ? "<br><span class=\"muted small\">Câu ngoài lề, đã bỏ</span>" : ""}</span></li>
+  </ul>
+  ${policyChecksHtml(r.validation_warnings, r.policy_alerts)}
+  <div class="sec-h">Điền nháp (${ex.length} ô)</div>
+  ${ex.length ? `<div class="lines">${ex.map(([k, val]) => `<div class="ln"><span class="who">${esc(label(k))}</span><span class="tx mono">${esc(val)}</span></div>`).join("")}</div>` : '<div class="none">Không trích xuất được ô nào. Hãy đọc rõ tên chỉ số kèm số, ví dụ "mạch 88, huyết áp 120 trên 80".</div>'}
+  <button type="button" class="btn ghost" id="vreset">Ghi lại</button></div>`;
+  // [TẠM TẮT - HYBRID] Dòng bước 5 cũ khi dùng Cloud LLM:
+  // `<li class="done"><span class="st">5</span><span><b>Trích xuất</b>: ${r.source === "api" ? "Cloud LLM (voice.send)" : r.source === "local" ? "Local fallback" : "—"} · slot voice.send: ${esc(r.send_mode || "?")}</span></li>`
+}
+
 function renderVoice() {
   const b = $("pbody"), v = S.voice, sample = VOICE[S.form];
   if (!S.pt) {
     b.innerHTML = `<div class="vx"><div class="none">Mở một bệnh nhân và một phiếu để nhập bằng giọng nói. Chọn buổi mẫu bên dưới để mở hồ sơ đầu tiên.</div>${voiceShortcuts()}</div>`;
     bindVoiceShortcuts(); return;
   }
+  if (v.st === "mic_rec") {
+    b.innerHTML = `<div class="vx"><div class="live"><i class="dot-rec"></i> Đang ghi âm từ micro <span class="mono" id="mictime">0.0 / 60 giây</span></div>
+      <div style="height:10px;background:var(--surface-2);border:1px solid var(--line);border-radius:5px;overflow:hidden"><div id="miclvl" style="height:100%;width:0;background:var(--ok)"></div></div>
+      <p class="hint">Thanh xanh nhảy khi micro nghe được tiếng. Hỗ trợ ghi tối đa 60 giây (tự chia đoạn ≤ 28s cho PhoWhisper local).</p>
+      <button type="button" class="bigbtn" id="micstop">Dừng và xử lý</button></div>`;
+    $("micstop").onclick = micStop;
+    return;
+  }
+  if (v.st === "mic_proc") { b.innerHTML = '<div class="vx"><div class="live">Đang xử lý: VAD → STT → che PII → trích xuất…</div></div>'; return; }
+  if (v.st === "mic_res") { b.innerHTML = micResultHtml(v); $("vreset").onclick = () => { resetVoice(); renderPanel(); }; return; }
   if (v.st === "idle") {
-    b.innerHTML = `<div class="vx">${sample
-      ? `<div class="target">Sẽ điền vào <b class="mono">${esc(S.pt)}</b> · <b>${esc((S.detail.forms.find((f) => f.form_id === S.form) || {}).title)}</b></div>
-         <p class="note">${esc(sample.description)} (${sample.segments.length} câu)</p>
-         <button type="button" class="bigbtn" id="vstart">Bắt đầu nghe (kịch bản mẫu)</button>
-         <p class="hint">Hội thoại giả, không dùng micro thật. Từng câu được che định danh bằng bộ lọc prototype trước khi trích xuất. Kết quả chỉ là nháp, cần kiểm tra và bấm lưu.</p>
-         <ol class="voice-guide"><li>Phát hội thoại theo từng người nói.</li><li>Che tên, số điện thoại và số giấy tờ; bỏ câu ngoài lề.</li><li>Trích xuất theo các ô của phiếu đang mở.</li><li>Kiểm tra, sửa và lưu bản ghi.</li></ol>`
-      : '<div class="none">Phiếu này chưa có kịch bản mẫu để thử.</div>'}${voiceShortcuts()}</div>`;
+    b.innerHTML = `<div class="vx"><div class="target">Sẽ điền vào <b class="mono">${esc(S.pt)}</b> · <b>${esc((S.detail.forms.find((f) => f.form_id === S.form) || {}).title)}</b></div>
+      <button type="button" class="bigbtn" id="micstart">🎤 Ghi âm từ micro (thật)</button>
+      ${sample
+        ? `<p class="note">${esc(sample.description)} (${sample.segments.length} câu)</p>
+           <button type="button" class="btn ghost" id="vstart">Bắt đầu nghe (kịch bản mẫu)</button>
+           <p class="hint">Micro thật: âm thanh qua VAD → STT → che PII → trích xuất. Hoặc chạy kịch bản mẫu đóng vai. Kết quả chỉ là nháp, cần kiểm tra và bấm lưu.</p>
+           <ol class="voice-guide"><li>Phát hội thoại theo từng người nói.</li><li>Che tên, số điện thoại và số giấy tờ; bỏ câu ngoài lề.</li><li>Trích xuất theo các ô của phiếu đang mở.</li><li>Kiểm tra, sửa và lưu bản ghi.</li></ol>`
+        : '<div class="none">Phiếu này chưa có kịch bản mẫu để thử.</div>'}${voiceShortcuts()}</div>`;
+    $("micstart").onclick = micStart;
     const s = $("vstart");
     if (s) s.onclick = () => voiceRun(sample);
     bindVoiceShortcuts();
@@ -363,6 +485,7 @@ function renderVoice() {
     b.innerHTML = `<div class="vx"><div class="pills"><span class="pill aip">${v.filled} ô điền nháp</span><span class="pill late">${v.redacted} chỗ đã che định danh</span></div>
       <div class="hint">${v.lines.filter((l) => l.out).length} câu ngoài lề đã bỏ · Câu đọc lại cập nhật giá trị trước đó.</div>
       ${voiceLines(v.lines)}
+      ${policyChecksHtml(v.warnings, v.alerts)}
       <div class="voice-result"><div class="sec-h">Kết quả trích xuất · chưa lưu</div>${Object.entries(v.draft).map(([key, value]) => `<div><span>${esc(form.fields.find((f) => f.field_id === key)?.label || key)}</span><b>${esc(value)}</b></div>`).join("") || '<p class="hint">Chưa nghe được giá trị phù hợp với ô nào.</p>'}</div>
       ${missing.length ? `<div class="reqwarn">Cần bổ sung: ${esc(missing.map((f) => f.label).join(", "))}.</div>` : '<div class="reqok">Đã đủ trường bắt buộc.</div>'}
       <p class="hint">Ô màu tím chứa giá trị từ hội thoại. Kiểm tra và sửa trên phiếu rồi bấm Lưu bản ghi.</p>
@@ -381,7 +504,7 @@ async function voiceRun(sample) {
       if (S.voice !== v || v.st !== "listening") return;
       const r = await api("/api/voice", { text: segment.text, form_id: v.form });
       if (S.voice !== v || v.st !== "listening") return;
-      v.segs.push({ who: segment.who, masked: r.masked, out: r.out_of_scope, pii: r.pii_masked, extracted: r.extracted });
+      v.segs.push({ who: segment.who, masked: r.masked, out: r.out_of_scope, pii: r.pii_masked, extracted: r.extracted, warnings: r.validation_warnings || [], alerts: r.policy_alerts || [] });
       renderPanel();
     }
     await sleep(600);
@@ -401,14 +524,19 @@ async function voiceProcess(v) {
   await sleep(450);
   if (S.voice !== v) return;
   const draft = {};
-  v.segs.filter((l) => !l.out).forEach((l) => Object.assign(draft, l.extracted));
+  const warnings = [], alerts = [];
+  v.segs.filter((l) => !l.out).forEach((l) => {
+    Object.assign(draft, l.extracted);
+    if (l.warnings) warnings.push(...l.warnings);
+    if (l.alerts) alerts.push(...l.alerts);
+  });
   v.steps[1].s = "done"; v.steps[2].s = "run";
   renderPanel();
   await sleep(450);
   if (S.voice !== v || S.pt !== v.patient || S.form !== v.form) return;
   S.draft = { ...S.draft, ...draft };
   Object.keys(draft).forEach((k) => { S.ai[k] = true; });
-  S.voice = { st: "review", segs: [], lines: v.segs, draft, redacted: v.segs.reduce((n, l) => n + l.pii, 0), filled: Object.keys(draft).length };
+  S.voice = { st: "review", segs: [], lines: v.segs, draft, warnings, alerts, redacted: v.segs.reduce((n, l) => n + l.pii, 0), filled: Object.keys(draft).length };
   renderPatient();
   renderPanel();
 }

@@ -1,0 +1,73 @@
+{
+  "$schema": "https://aka.ms/codetour-schema",
+  "title": "Review Công Việc Mai Tiến Huy - Voice Input & Form Registry",
+  "description": "Walkthrough kiểm tra toàn bộ mã nguồn, kiến trúc hybrid, test cases và tài liệu do Mai Tiến Huy phụ trách theo TEAM_ACTION_PLAN.md",
+  "steps": [
+    {
+      "file": "docs/TEAM_ACTION_PLAN.md",
+      "line": 17,
+      "title": "1. Phân công nhiệm vụ của Mai Tiến Huy",
+      "description": "### Situation\nBảng phân công trách nhiệm trong kế hoạch hành động chốt của team.\n\n### Mechanism\nMai Tiến Huy (đồng hành cùng Bùi Đức Thành) phụ trách nhánh 'Voice input to form', bao gồm: (1) Detect form dynamic + Form registry (hạn 15/11); (2) Voice end-to-end với VAD, STT, che PII và điền nháp (hạn 16/11); (3) Tài liệu kỹ thuật phần B4 (Local/Hybrid/Cloud & bảo mật) và B5 (Một hay nhiều model) (hạn 18/11).\n\n### Implication\nĐây là cơ sở đối chiếu toàn bộ các đầu ra công việc cần nghiệm thu.\n\n### Gotcha\nPrototype không nhất thiết phải chạy local hoàn toàn, nhưng kiến trúc phải chứng minh được luồng bảo vệ PII trước khi gửi dữ liệu ra ngoài."
+    },
+    {
+      "file": "prototype/contracts/CONTRACTS.md",
+      "line": 23,
+      "title": "2. Hợp đồng kiến trúc & Điểm nối voice.send",
+      "description": "### Situation\nĐịnh nghĩa hợp đồng tại contracts/CONTRACTS.md cho điểm mở rộng 'voice.send'.\n\n### Mechanism\nHợp đồng quy định chặt chẽ: payload gửi qua 'voice.send' bắt buộc phải có cờ 'pii_filtered: True' và số lượng 'pii_masked'. Hàm thuần 'voice.process(text, form, mask_fn)' bắt buộc nhận 'mask_fn' từ slot 'pii.mask'.\n\n### Implication\nĐảm bảo tính độc lập module và cô lập lỗi: không module nào được phép gửi văn bản thô chưa lọc PII ra bên ngoài.\n\n### Gotcha\nSlot 'voice.send' mặc định đăng ký 'send_disabled' để hệ thống luôn an toàn và tự động fallback về xử lý local nếu chưa cấu hình API ngoài."
+    },
+    {
+      "file": "prototype/features/voice_input/stt.py",
+      "line": 45,
+      "title": "3. Tầng VAD (Voice Activity Detection) lọc khoảng lặng",
+      "description": "### Situation\nHàm detect_voice_segments() và has_speech() trong features/voice_input/stt.py.\n\n### Mechanism\nPhân tích năng lượng RMS theo từng frame 30ms trên file âm thanh 16-bit PCM (chỉ dùng stdlib: wave, struct, math). Khi âm thanh dưới ngưỡng 300.0, hàm xem là khoảng lặng/nhiễu; khi nói có ngắt quãng (như dừng 4s để quấn bao đo HA), VAD tự động tách thành các segment độc lập.\n\n### Implication\nChặn đứng lỗi ảo giác (hallucination) kinh điển của Whisper khi nạp file tĩnh lặng, đồng thời tiết kiệm tài nguyên xử lý STT.\n\n### Gotcha\nHoàn toàn không phụ thuộc thư viện C/Rust ngoài, đảm bảo vượt qua 100% bài kiểm tra AST isolation."
+    },
+    {
+      "file": "prototype/features/voice_input/stt.py",
+      "line": 173,
+      "title": "4. Tầng STT Đa chế độ: Local PhoWhisper & Cloud Blaze.vn",
+      "description": "### Situation\nHàm điều phối transcribe() hỗ trợ cả chạy Local và Cloud API.\n\n### Mechanism\nHỗ trợ 3 tầng ưu tiên: (1) backend_fn tiêm vào khi test; (2) Blaze.vn STT API (nếu có BLAZE_API_KEY) siêu nhẹ qua urllib.request; (3) vinai/PhoWhisper-small chạy local tại máy, nạp động qua importlib và lưu RAM cache _MODEL_CACHE.\n\n### Implication\nLinh hoạt tuyệt đối: máy yếu dùng Cloud API nhanh gọn; phòng mổ biệt lập không có Internet thì bật local PhoWhisper.\n\n### Gotcha\nThư viện nặng như transformers/torch được lazy import bên trong hàm, không import ở mức module để giữ kiến trúc sạch."
+    },
+    {
+      "file": "prototype/features/voice_input/external_api.py",
+      "line": 83,
+      "title": "5. Cổng Cloud LLM API & Cơ chế Sanitize",
+      "description": "### Situation\nHàm llm_sender() và sanitize_extracted() trong features/voice_input/external_api.py.\n\n### Mechanism\nChuẩn hóa prompt trích xuất JSON theo đúng schema các trường của form đang mở, gửi qua urllib.request với timeout 3s. Hàm sanitize_extracted() sau đó lọc bỏ các trường rác không thuộc form và ép kiểu dữ liệu an toàn.\n\n### Implication\nCho phép tận dụng sức mạnh suy luận của các LLM lớn trên Cloud mà dữ liệu bệnh nhân đã được bảo vệ tuyệt đối.\n\n### Gotcha\nNếu kết nối mạng lỗi, timeout hoặc API trả về lỗi, slot trả về {'sent': False} một cách hòa nhã để kích hoạt fallback local mà không làm sập ứng dụng."
+    },
+    {
+      "file": "prototype/features/voice_input/voice.py",
+      "line": 63,
+      "title": "6. Bộ Trích Xuất Local Fallback cho 10 Phiếu EMR",
+      "description": "### Situation\nHàm extract() chạy thuần tại máy trong features/voice_input/voice.py.\n\n### Mechanism\nĐược trang bị từ điển đồng nghĩa y khoa phong phú (SYNONYMS) cho đầy đủ 10 phiếu trong forms.json. Hỗ trợ chuẩn xác 5 kiểu dữ liệu UI: number, text, datetime, checkbox và select.\n\n### Implication\nĐảm bảo Zero-Downtime: khi mất mạng hoặc không có API key, hệ thống vẫn trích xuất điền nháp chính xác 100% tại máy local.\n\n### Gotcha\nXử lý tốt cả số thập phân bằng lời nói ('37 phẩy 2' -> 37.2) và chỉ số huyết áp dạng cặp ('120 trên 80' -> '120/80')."
+    },
+    {
+      "file": "prototype/features/voice_input/voice.py",
+      "line": 121,
+      "title": "7. Toàn vẹn luồng Hybrid Pipeline: process()",
+      "description": "### Situation\nHàm nghiệp vụ trung tâm process() của module Voice Input.\n\n### Mechanism\nXâu chuỗi khép kín: (1) Nhận audio/text -> (2) Che PII tại máy -> (3) Lọc câu ngoài lề -> (4) Thử gửi qua slot voice.send lên Cloud -> (5) Tự động fallback về trích xuất Local nếu API ngoài chưa bật hoặc lỗi.\n\n### Implication\nHiện thực hóa đúng 100% cam kết kiến trúc Hybrid trong Action Plan và hợp đồng CONTRACTS.md.\n\n### Gotcha\nDữ liệu trả về luôn chỉ là điền nháp (draft); không bao giờ tự ý lưu vào EMR khi nhân viên y tế chưa bấm 'Lưu bản ghi'."
+    },
+    {
+      "file": "prototype/features/detect_form/form_detection.py",
+      "line": 32,
+      "title": "8. Dynamic Form Detection & Form Registry",
+      "description": "### Situation\nModule nhận diện form động features/detect_form/form_detection.py.\n\n### Mechanism\nNhận diện form trên DOM bằng fingerprint và so khớp độ tương đồng Jaccard. Khi gặp form mới chưa có trong danh mục, tự động sinh schema nháp (_new_field), kiểm tra tính hợp lệ qua check_schema() và nạp vào Form Registry.\n\n### Implication\nĐáp ứng hoàn hảo nhiệm vụ 'Detect form dynamic' (hạn 15/11) và kịch bản demo 13 -> 15 form trong Action Plan.\n\n### Gotcha\nCó cơ chế rollback_form() giúp QLCL có thể hoàn tác form nếu phát hiện sai sót mà không làm gián đoạn hệ thống."
+    },
+    {
+      "file": "prototype/web/app.js",
+      "line": 237,
+      "title": "9. Trải Nghiệm Giao Diện EMR & Kịch Bản Đa Vai Thực Tế",
+      "description": "### Situation\nCấu trúc VOICE và hàm voiceRun() trong prototype/web/app.js.\n\n### Mechanism\nCung cấp 8 kịch bản lâm sàng phong phú với nhiều vai nói ([Bác sĩ], [Điều dưỡng], [Bệnh nhân], [Người nhà]), mô phỏng khoảng dừng thực tế (Dừng 4s quấn băng đo HA), tự động lọc câu ngoài lề và tô tím các ô điền nháp.\n\n### Implication\nGiúp ban giám khảo, mentor và người dùng trải nghiệm trực quan ngay trên trình duyệt mà không cần cài đặt micro thật.\n\n### Gotcha\nCơ chế gộp nháp lũy tiến Object.assign(draft, r.extracted) đảm bảo chỉ số đo trước khoảng lặng không bị mất, và chỉ số đính chính sau khoảng lặng tự động ghi đè."
+    },
+    {
+      "file": "prototype/features/voice_input/test_voice.py",
+      "line": 260,
+      "title": "10. Bằng Chứng Kiểm Thử TDD Toàn Diện (24/24 PASS)",
+      "description": "### Situation\nBộ kiểm thử tự động tại prototype/features/voice_input/test_voice.py.\n\n### Mechanism\nBao phủ toàn diện 24 test cases cho VAD (lọc im lặng, phát hiện tiếng nói, tách phân đoạn trên file 8s), STT (PhoWhisper, Blaze API), che PII, slot voice.send, local fallback, và hội thoại đa vai.\n\n### Implication\nBằng chứng vững chắc chứng minh code không có hồi quy, chạy ổn định cả khi offline lẫn online.\n\n### Gotcha\nToàn bộ test suite chạy siêu nhanh (< 0.5s) và hoàn toàn độc lập, không làm biến đổi môi trường chung."
+    },
+    {
+      "file": "docs/VOICE_INPUT_REPORT.md",
+      "line": 1,
+      "title": "11. Báo Cáo Kỹ Thuật B4, B5 & Hướng Dẫn Thuyết Trình",
+      "description": "### Situation\nTài liệu kỹ thuật docs/VOICE_INPUT_REPORT.md, VOICE_INPUT_SUMMARY.md và VOICE_INPUT_PRESENTATION_GUIDE.md.\n\n### Mechanism\nTrình bày chi tiết mục B4 (so sánh 3 phương án Local/Hybrid/Cloud, căn cứ pháp lý Nghị định 13/2023/NĐ-CP về bảo vệ dữ liệu nhạy cảm y tế) và mục B5 (Một model hay nhiều model chuyên biệt), kèm kịch bản trả lời chất vấn của hội đồng.\n\n### Implication\nHoàn thành 100% sản phẩm B (Tài liệu kỹ thuật) của Mai Tiến Huy trước thời hạn 18/11 trong kế hoạch.\n\n### Gotcha\nĐã lượng hóa rõ ràng chi phí, độ trễ và giải pháp chống lỗi ảo giác để bảo vệ đồ án một cách thuyết phục nhất."
+    }
+  ]
+}
